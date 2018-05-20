@@ -4,3 +4,7 @@ out
 out/*
 
 *.class
+
+activitystreamerclient/target/maven-status/maven-compiler-plugin/compile/default-compile/
+
+activitystreamerclient/target/
