@@ -38,6 +38,9 @@ public class ConnectedClient {
 
     /** Increments the number of LOCK_ALLOWED messages received */
     public boolean receivedLockAllowed() {
+        if (isRegistered()) {
+            return false;
+        }
         this.lockRequestServerCount -= 1;
         if (this.lockRequestServerCount == 0) {
             this.registered = true;
