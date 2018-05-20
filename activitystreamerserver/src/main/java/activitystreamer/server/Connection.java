@@ -81,7 +81,8 @@ public class Connection extends Thread {
             log.debug("connection closed to " + Settings.socketAddress(socket));
             Control.getInstance().deleteClosedConnection(this);
             in.close();
-        } catch (IOException e) {
+        }
+        catch (IOException e) {
             log.error("connection " + Settings.socketAddress(socket) + " closed with exception: " + e);
             Control.getInstance().deleteClosedConnection(this);
         }

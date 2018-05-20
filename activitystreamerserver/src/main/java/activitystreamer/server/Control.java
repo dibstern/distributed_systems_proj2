@@ -457,10 +457,12 @@ public class Control extends Thread {
      * @param username The username supplied by the client to register with
      * @param secret The secret supplied by the client to register with **/
     public void registerNewClient(Connection con, String username, String secret) {
+
         // Save client as a client connection
         int numKnownServers = numKnownServersInNetwork();
         clientConnections.put(con, new ConnectedClient(username, secret, numKnownServers));
         connections.remove(con);
+
         // No need to send lock request if no servers connected
         if (numKnownServers == 0) {
             registrationSuccess(username, secret, con);

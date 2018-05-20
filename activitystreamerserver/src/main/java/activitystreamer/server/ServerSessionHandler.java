@@ -149,7 +149,7 @@ public class ServerSessionHandler {
                     // Update this server's information about the given server
                     Control.getInstance().updateServerInfo(id, load, hostname, port);
 
-                    // Forward to all other server's this server is connected to
+                    // Forward to all other servers that this server is connected to
                     Control.getInstance().forwardServerMsg(con, json.toString());
                 }
             });
