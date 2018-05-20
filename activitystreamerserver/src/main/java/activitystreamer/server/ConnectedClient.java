@@ -37,11 +37,12 @@ public class ConnectedClient {
     }
 
     /** Increments the number of LOCK_ALLOWED messages received */
-    public void receivedLockAllowed() {
+    public boolean receivedLockAllowed() {
         this.lockRequestServerCount -= 1;
         if (this.lockRequestServerCount == 0) {
             this.registered = true;
         }
+        return this.registered;
     }
 
     /*

@@ -424,7 +424,7 @@ public class Control extends Thread {
 
         int load = clientConnections.size();
         for (ConnectedServer server : serverInfo.values()) {
-            if (server.getLoad() <= load - 2) {
+            if (server.getLoad() < load - 2) {
                 String msg = MessageProcessor.getRedirectMsg(server.getHostname(), server.getPort());
                 c.writeMsg(msg);
                 clientConnections.remove(c);
@@ -548,8 +548,10 @@ public class Control extends Thread {
             ConnectedClient clientInfo = client.getValue();
             if (clientInfo.isClient(username, secret)) {
                 Connection clientConnection = client.getKey();
-                clientInfo.receivedLockAllowed();
-                registrationSuccess(username, secret, clientConnection);
+                boolean registrationComplete = clientInfo.receivedLockAllowed();
+                if (registrationComplete) {
+                    registrationSuccess(username, secret, clientConnection);
+                }
                 return true;
             }
         }
