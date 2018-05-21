@@ -29,7 +29,7 @@ public class SessionManager extends Thread {
     private static Listener listener;
     private static String serverId;
     private static Responder responder;
-    private static ConcurrentHashMap<String, ClientRecord> clientRegistry;
+    private static ClientRegistry clientRegistry;
 
     protected static SessionManager sessionManager = null;
 
@@ -56,7 +56,7 @@ public class SessionManager extends Thread {
         serverInfo = new HashMap<String, ConnectedServer>();
 
         // Store information about all know clients in a system
-        clientRegistry = new ConcurrentHashMap<String, ClientRecord>();
+        clientRegistry = new ClientRegistry();
 
         // Set server ID by randomly generating a string
         serverId = Settings.nextSecret();
@@ -324,24 +324,6 @@ public class SessionManager extends Thread {
     }
 
     /**
-     * Checks to see if a supplied username and secret match that which is stored locally. Returns true if matches,
-     * false otherwise.
-     * @param username The supplied username
-     * @param password The supplied secret to be checked against the given username
-     * @return True if secret and password match what is on storage, false otherwise
-     */
-    public boolean secretIsCorrect(String username, String password) {
-        // Retrieve password stored for user from local storage
-
-        if (clientRegistry.containsKey(username)) {
-            ClientRecord client = clientRegistry.get(username);
-            String storedPassword = client.getSecret();
-            return storedPassword.equals(password);
-        }
-        return false;
-    }
-
-    /**
      * Client failed to login successfully - send a failure message back to the client
      * @param con The connection to send the message on
      * @param failureMessage The failure message to be sent
@@ -364,7 +346,7 @@ public class SessionManager extends Thread {
         String failure_message = null;
 
         // If the username & secret combination matches the known combination
-        if (secretIsCorrect(username, password)) {
+        if (clientRegistry.secretCorrect(username, password)) {
 
             // Is the connected client registering with this server?
             if (clientConnections.containsKey(c)) {
@@ -507,46 +489,6 @@ public class SessionManager extends Thread {
         closeConnection(con);
     }
 
-    /** Register a new client by saving username and password locally
-     * @param username The username a client is registering with
-     * @param secret The secret a client is registering with **/
-    public void registerUserSecret(String username, String secret) {
-        ClientRecord newClient = new ClientRecord(username, secret);
-        clientRegistry.put(username, newClient);
-    }
-
-    /** Checks all of the username's registered with the client to see if it already exists.
-     * Returns true if username already registered, false otherwise.
-     * @param username The username to be looked up
-     * @return True if username already exists in local server storage, false otherwise **/
-    public boolean usernameExists(String username) {
-        return clientRegistry.containsKey(username);
-    }
-
-    /** Removes a username from the client registry
-     * @param username The username to be removed. **/
-    public void removeUser(String username) {
-        clientRegistry.remove(username);
-    }
-
-    /**
-     * Checks to see if a client has registered
-     * @param username The username of the sending client
-     * @param secret The corresponding secret for that client
-     * @return True if has registered, false otherwise.
-     */
-    public boolean isRegistered(String username, String secret) {
-
-        if (clientRegistry.containsKey(username))
-        {
-            String clientSecret = clientRegistry.get(username).getSecret();
-            if (clientSecret.equals(secret))
-            {
-                return true;
-            }
-        }
-        return false;
-    }
     /**
      * If the Client with the same username and password is stored in this server's connections, it will tell it that
      * it has received a LOCK_ALLOWED message (setting that server as "registered" once all the required no. of
@@ -570,19 +512,6 @@ public class SessionManager extends Thread {
         }
         return false;
     }
-
-    /**
-     * A given username does not already exist in the server storage. Tell sending server that the lock is allowed.
-     * @param lockType The type of message to be sent
-     * @param username The username attempting to be registered
-     * @param secret The corresponding secret */
-    public void broadcastLockMsg(String lockType, String username, String secret) {
-        // Create the lock success message to be sent across the network with given username and secret
-        String msg = MessageProcessor.getLockResponseMg(lockType, username, secret);
-        // Send message to each server this server is connected to
-        serverBroadcast(msg);
-    }
-
 
 
 
@@ -681,5 +610,9 @@ public class SessionManager extends Thread {
      */
     public final void setTerm(boolean t) {
         term = t;
+    }
+
+    public ClientRegistry getClientRegistry() {
+        return this.clientRegistry;
     }
 }

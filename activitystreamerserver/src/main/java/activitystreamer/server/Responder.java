@@ -94,14 +94,15 @@ public class Responder {
                     String secret = (String) json.get("secret");
 
                     // If server already knows of username then the registration fails
-                    if (SessionManager.getInstance().usernameExists(username)) {
-                        SessionManager.getInstance().registrationFailed(username, secret, con);
+                    SessionManager sessionManager = SessionManager.getInstance();
+                    if (sessionManager.getClientRegistry().userExists(username)) {
+                        sessionManager.registrationFailed(username, secret, con);
                     }
                     // Username not known to this server - send out a lock request to all servers connected to
                     // and add username and secret to it's database
                     else {
-                        SessionManager.getInstance().registerUserSecret(username, secret);
-                        SessionManager.getInstance().registerNewClient(con, username, secret);
+                        sessionManager.getClientRegistry().addFreshClient(username, secret);
+                        sessionManager.registerNewClient(con, username, secret);
                     }
                 }
             });
@@ -147,10 +148,11 @@ public class Responder {
                     int port = ((Long) json.get("port")).intValue();
 
                     // Update this server's information about the given server
-                    SessionManager.getInstance().updateServerInfo(id, load, hostname, port);
+                    SessionManager sessionManager = SessionManager.getInstance();
+                    sessionManager.updateServerInfo(id, load, hostname, port);
 
                     // Forward to all other servers that this server is connected to
-                    SessionManager.getInstance().forwardServerMsg(con, json.toString());
+                    sessionManager.forwardServerMsg(con, json.toString());
                 }
             });
             /* A server on the network is trying to register a new user. Check if username exists on this server, and
@@ -161,20 +163,22 @@ public class Responder {
                     String username = (String) json.get("username");
                     String secret = (String) json.get("secret");
 
-                    SessionManager serverController = SessionManager.getInstance();
+                    SessionManager sessionManager = SessionManager.getInstance();
 
                     // Firstly, if username exists then broadcast a LOCK_DENIED message // TODO: Aaron said this on LMS
-                    if (serverController.usernameExists(username)) {
-                        serverController.broadcastLockMsg("LOCK_DENIED", username, secret);
+                    if (sessionManager.getClientRegistry().userExists(username)) {
+                        String msg = MessageProcessor.getLockResponseMg("LOCK_DENIED", username, secret);
+                        sessionManager.serverBroadcast(msg);
                     }
                     // Otherwise, broadcast Lock request and send LOCK_ALLOWED
                     else {
                         // Forward the LOCK_REQUEST message on to all other server connections
-                        serverController.forwardServerMsg(con, json.toString());
+                        sessionManager.forwardServerMsg(con, json.toString());
 
                         // Add to username registry and send LOCK_ALLOWED message
-                        serverController.registerUserSecret(username, secret);
-                        serverController.broadcastLockMsg("LOCK_ALLOWED", username, secret);
+                        sessionManager.getClientRegistry().addFreshClient(username, secret);
+                        String msg = MessageProcessor.getLockResponseMg("LOCK_ALLOWED", username, secret);
+                        sessionManager.serverBroadcast(msg);
                     }
                 }
             });
@@ -187,16 +191,17 @@ public class Responder {
                     String username = (String) json.get("username");
                     String secret = (String) json.get("secret");
 
+                    SessionManager sessionManager = SessionManager.getInstance();
+
                     // If the user/secret combination is in our registry, remove the combo from our local storage
-                    if (SessionManager.getInstance().isRegistered(username, secret)) {
-                        // Remove the username from the registry
-                        SessionManager.getInstance().removeUser(username);
+                    if (sessionManager.getClientRegistry().secretCorrect(username, secret)) {
+                        sessionManager.getClientRegistry().removeUser(username);
                     }
                     // If it's one of our connections, send REGISTRATION_FAILED message
-                    SessionManager.getInstance().registrationFailed(username, secret, con);
+                    sessionManager.registrationFailed(username, secret, con);
 
                     // Forward the LOCK_DENIED message to all other connections
-                    SessionManager.getInstance().broadcastMessage(con, json.toString());
+                    sessionManager.broadcastMessage(con, json.toString());
                 }
             });
 
@@ -210,9 +215,11 @@ public class Responder {
                     String username = (String) json.get("username");
                     String secret = (String) json.get("secret");
 
+                    SessionManager sessionManager = SessionManager.getInstance();
+
                     // Update if we're the sender of the request, else forward LOCK_ALLOWED to all servers except sender
-                    if (!SessionManager.getInstance().updateIfSender(username, secret)) {
-                        SessionManager.getInstance().forwardServerMsg(con, json.toString());
+                    if (!sessionManager.updateIfSender(username, secret)) {
+                        sessionManager.forwardServerMsg(con, json.toString());
                     }
                 }
             });

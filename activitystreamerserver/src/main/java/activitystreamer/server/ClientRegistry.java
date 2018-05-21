@@ -99,6 +99,14 @@ public class ClientRegistry {
         clientRecords.put(username, new ClientRecord(username, secret));
     }
 
+    public boolean secretCorrect(String username, String secret) {
+        if (!userExists(username)) {
+            return false;
+        }
+        ClientRecord record = clientRecords.get(username);
+        return record.sameSecret(secret);
+    }
+
     /**
      *
      *
@@ -115,6 +123,13 @@ public class ClientRegistry {
         else {
             return null;
         }
+    }
 
+    public boolean userExists(String user) {
+        return clientRecords.containsKey(user);
+    }
+
+    public void removeUser(String username) {
+        clientRecords.remove(username);
     }
 }

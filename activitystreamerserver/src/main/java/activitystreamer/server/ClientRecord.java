@@ -113,10 +113,6 @@ public class ClientRecord {
         });
     }
 
-
-    // Update
-
-
     /*
      * Getters and Setters
      */
@@ -149,6 +145,10 @@ public class ClientRecord {
             return this.secret.equals(clientRecord.get("secret").toString());
         }
         return false;
+    }
+
+    public boolean sameSecret(String secret) {
+        return this.secret.equals(secret);
     }
 
     public JSONObject getMessage(Integer token) {
