@@ -58,7 +58,7 @@ public class ClientRegistry {
             }
             // Or create a new record
             else {
-                clientRecords.put(username, new ClientRecord(clientRecordJson);
+                clientRecords.put(username, new ClientRecord(clientRecordJson));
             }
         });
     }
@@ -69,20 +69,18 @@ public class ClientRegistry {
      * Use GSON to convert ClientRecords to JSON
      * https://github.com/google/gson/blob/master/UserGuide.md#TOC-Object-Examples
      *
-     * @return JSONArray - containing the converted Client Registry
+     * @return JSONArray - containing the converted Client Registry. Null if GSON library broken?
      */
     public JSONArray getRecordsJson() {
 
         // Place ClientRecords into an array
         ArrayList<ClientRecord> recordArray = new ArrayList<ClientRecord>();
-        clientRecords.forEach((username, record) -> {
-            recordArray.add(record);
-        });
+        clientRecords.forEach((username, record) -> recordArray.add(record));
 
         // Convert ArrayList into JSONArray String
         Gson gson = new Gson();
         String jsonArrayString = gson.toJson(recordArray);
-        JSONArray recordJsonArray;
+        JSONArray recordJsonArray = null;
 
         // Convert JSON compatible string into JSON
         JSONParser parser = new JSONParser();
@@ -91,9 +89,7 @@ public class ClientRegistry {
         }
         catch (ParseException e) {
             e.printStackTrace();
-            recordJsonArray = new JSONArray();
-            recordJsonArray.add("failure");
-            return recordJsonArray;
+            System.out.println("Parse Error: Parsing JSON Array String Created By GSON Library.");
         }
         return recordJsonArray;
     }
