@@ -45,6 +45,7 @@ public class Connection extends Thread {
         StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();
         if (open) {
             outwriter.println(msg);
+            System.out.println("Sending: " + msg);
             return true;
         }
         return false;
@@ -71,16 +72,22 @@ public class Connection extends Thread {
     /**
      * Using threaded connections so server can have multiple clients - runs the connection thread whilst the server
      * still exists, and there are messages being sent to the connnection.
+     *
+     * TODO: Insert while(retry) loop and a 2 sec delay after a broken network connection
      */
     public void run() {
+        // boolean retry = true;
+        // while (retry) {
         try {
             String data;
             while (!term && (data = inreader.readLine()) != null) {
                 term = Control.getInstance().process(this, data);
+                System.out.println("Receiving: " + data);
             }
             log.debug("connection closed to " + Settings.socketAddress(socket));
             Control.getInstance().deleteClosedConnection(this);
             in.close();
+            // retry = false;
         }
         catch (IOException e) {
             log.error("connection " + Settings.socketAddress(socket) + " closed with exception: " + e);
@@ -88,6 +95,4 @@ public class Connection extends Thread {
         }
         open = false;
     }
-
-
 }
