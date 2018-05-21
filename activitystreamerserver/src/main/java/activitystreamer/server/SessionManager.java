@@ -88,7 +88,8 @@ public class SessionManager extends Thread {
                 log.info("connected to server on port number " + Settings.getRemotePort());
             }
             catch (IOException e) {
-                log.error("failed to make connection to " + Settings.getRemoteHostname() + ":" + Settings.getRemotePort() + " :" + e);
+                log.error("failed to make connection to " + Settings.getRemoteHostname() + ":" +
+                        Settings.getRemotePort() + " :" + e);
                 System.exit(-1);
             }
         }
@@ -161,8 +162,8 @@ public class SessionManager extends Thread {
     }
 
     /**
-     * Runs the server SessionManager. Sends regular SERVER_ANNOUNCE messages to all servers on the network at a given time
-     * interval.
+     * Runs the server SessionManager. Sends regular SERVER_ANNOUNCE messages to all servers on the network at a given
+     * time interval.
      */
     @Override
     public void run() {

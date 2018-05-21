@@ -220,10 +220,8 @@ public class MessageProcessor {
      * @return Msg the message to be sent back to the client */
     public static String getLoginSuccessMsg(String username) {
         JSONObject msg = new JSONObject();
-
         msg.put("command", "LOGIN_SUCCESS");
         msg.put("info", "logged in as user " + username);
-
         return msg.toString();
     }
 
@@ -232,10 +230,8 @@ public class MessageProcessor {
      * @return msg the message to be sent back to the sender */
     public static String getInvalidMessage(String errorLog) {
         JSONObject msg = new JSONObject();
-
         msg.put("command", "INVALID_MESSAGE");
         msg.put("info", errorLog);
-
         return msg.toString();
     }
 
@@ -254,10 +250,8 @@ public class MessageProcessor {
      * @return Msg the message to be sent back to the server */
     public static String getAuthenticationFailedMsg(String secret) {
         JSONObject msg = new JSONObject();
-
         msg.put("command", "AUTHENTICATION_FAIL");
         msg.put("info", "the supplied secret is incorrect: " + secret);
-
         return msg.toString();
     }
 
@@ -266,10 +260,8 @@ public class MessageProcessor {
      * @return Msg the message to be sent back to the client */
     public static String getClientLoginFailedMsg(String failureMessage) {
         JSONObject msg = new JSONObject();
-
         msg.put("command", "LOGIN_FAILED");
         msg.put("info", failureMessage);
-
         return msg.toString();
     }
 
@@ -280,11 +272,9 @@ public class MessageProcessor {
      * @return Msg the message to be sent back to the client */
     public static String getRedirectMsg(String hostName, int portNum) {
         JSONObject msg = new JSONObject();
-
         msg.put("command", "REDIRECT");
         msg.put("hostname", hostName);
         msg.put("port", portNum);
-
         return msg.toString();
     }
 
@@ -296,13 +286,11 @@ public class MessageProcessor {
      * @return Msg the message to be sent to all servers on the network */
     public static String getServerAnnounceMsg(String id, int load, String hostName, int portnum) {
         JSONObject msg = new JSONObject();
-
         msg.put("command", "SERVER_ANNOUNCE");
         msg.put("id", id);
         msg.put("load", load);
         msg.put("hostname", hostName);
         msg.put("port", portnum);
-
         return msg.toString();
     }
 
@@ -311,10 +299,8 @@ public class MessageProcessor {
      * @return Msg the message to be sent across the network*/
     public static String getActivityBroadcastMsg(JSONObject json) {
         JSONObject msg = new JSONObject();
-
         msg.put("command", "ACTIVITY_BROADCAST");
         msg.put("activity", json);
-
         return msg.toString();
     }
 
@@ -333,10 +319,8 @@ public class MessageProcessor {
      * @return Msg the message to be sent back to the client */
     public static String getRegisterSuccessMsg(String username) {
         JSONObject msg = new JSONObject();
-
         msg.put("command", "REGISTER_SUCCESS");
         msg.put("info", "register success for " + username);
-
         return msg.toString();
     }
 
@@ -345,10 +329,8 @@ public class MessageProcessor {
      * @return Msg the message to be sent back to the client */
     public static String getRegisterFailedMsg(String username) {
         JSONObject msg = new JSONObject();
-
         msg.put("command", "REGISTER_FAILED");
         msg.put("info", username + " is already registered with the system");
-
         return msg.toString();
     }
 
@@ -358,11 +340,9 @@ public class MessageProcessor {
      * @return Msg the message to be sent to all servers on the network */
     public static String getLockRequestMsg(String username, String secret) {
         JSONObject msg = new JSONObject();
-
         msg.put("command", "LOCK_REQUEST");
         msg.put("username", username);
         msg.put("secret", secret);
-
         return msg.toString();
     }
 
@@ -373,11 +353,9 @@ public class MessageProcessor {
      * @return Msg the message to be sent to all servers on the network */
     public static String getLockResponseMg(String lockType, String username, String secret) {
         JSONObject msg = new JSONObject();
-
         msg.put("command", lockType);
         msg.put("username", username);
         msg.put("secret", secret);
-
         return msg.toString();
     }
 }
