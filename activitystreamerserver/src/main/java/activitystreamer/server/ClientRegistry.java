@@ -3,9 +3,6 @@ package activitystreamer.server;
 import com.google.gson.Gson;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
-
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -34,7 +31,7 @@ public class ClientRegistry {
      *  - TCP Ensures error-free data transfer, so we can assume all messages are well formed (as we created them)
      * @param ...
      */
-    public void updateRecords(JSONArray registry) throws org.json.simple.parser.ParseException {
+    public void updateRecords(JSONArray registry) {
         // Iterate through Array
         registry.forEach((clientRecordObject) -> {
 
@@ -69,9 +66,9 @@ public class ClientRegistry {
      * Use GSON to convert ClientRecords to JSON
      * https://github.com/google/gson/blob/master/UserGuide.md#TOC-Object-Examples
      *
-     * @return JSONArray - containing the converted Client Registry. Null if GSON library broken?
+     * @return JSONObject - containing the converted Client Registry. Null if GSON library broken?
      */
-    public JSONArray getRecordsJson() {
+    public JSONObject getRecordsJson() {
 
         // Place ClientRecords into an array
         ArrayList<ClientRecord> recordArray = new ArrayList<ClientRecord>();
@@ -80,18 +77,7 @@ public class ClientRegistry {
         // Convert ArrayList into JSONArray String
         Gson gson = new Gson();
         String jsonArrayString = gson.toJson(recordArray);
-        JSONArray recordJsonArray = null;
-
-        // Convert JSON compatible string into JSON
-        JSONParser parser = new JSONParser();
-        try {
-            recordJsonArray = (JSONArray) parser.parse(jsonArrayString);
-        }
-        catch (ParseException e) {
-            e.printStackTrace();
-            System.out.println("Parse Error: Parsing JSON Array String Created By GSON Library.");
-        }
-        return recordJsonArray;
+        return MessageProcessor.toJson(jsonArrayString, true);
     }
 
 

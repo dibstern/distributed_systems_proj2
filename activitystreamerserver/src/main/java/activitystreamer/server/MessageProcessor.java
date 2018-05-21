@@ -199,12 +199,18 @@ public class MessageProcessor {
      * @param data The string, hopefully formatted as a JSON object, to be parsed.
      * @return A JSONObject containing the data included in the string, or a specific error response.
      */
-    public static JSONObject toJson(String data) {
+    public static JSONObject toJson(String data, boolean dataIsArray) {
 
         JSONParser parser = new JSONParser();
         JSONObject json;
 
         try {
+            if (dataIsArray) {
+                JSONArray jsonData = (JSONArray) parser.parse(data);
+                json = new JSONObject();
+                json.put("registry", dataIsArray);
+                return json;
+            }
             return (JSONObject) parser.parse(data);
         }
         catch (ParseException e) {
