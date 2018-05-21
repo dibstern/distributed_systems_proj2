@@ -1,5 +1,6 @@
 package activitystreamer.server;
 
+import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -34,14 +35,26 @@ public class MessageProcessor {
         boolean containsLoginInfo = json.containsKey("username") &&
                 (json.get("username").toString().equals("anonymous") || containsSecret);
         boolean containsActivity = json.containsKey("activity");
+        boolean isValidServerAuthMsg = false;
+        if (json.containsKey("registry")) {
+            Object registryObj = json.get("registry");
+
+            if (registryObj instanceof JSONArray) { // TODO: This
+                isValidServerAuthMsg = true;
+            }
+        }
 
         // Error message to be sent if JSONObject is missing required field
         String command = (String) json.get("command");
         String missingFieldMsg = "the received " + command + " was missing fields";
 
         switch (command) {
+
+            // TODO: Check that this is correct
+            case "AUTHENTICATION_SUCCESS":
+                return (isValidServerAuthMsg ? null : missingFieldMsg);
             case "AUTHENTICATE":
-                return (containsSecret ? null : missingFieldMsg);
+                return (containsSecret && isValidServerAuthMsg ? null : missingFieldMsg);
             case "LOGIN":
             case "REGISTER":
             case "LOCK_REQUEST":
@@ -55,6 +68,7 @@ public class MessageProcessor {
             case "SERVER_ANNOUNCE":
                 return ((json.containsKey("id") && json.containsKey("load") && json.containsKey("hostname") &&
                         json.containsKey("port")) ? null : missingFieldMsg);
+            case "AUTHENTICATION_FAIL":
             case "INVALID_MESSAGE":
                 return (json.containsKey("info") ? null : missingFieldMsg);
             case "LOGOUT":
@@ -148,7 +162,7 @@ public class MessageProcessor {
         boolean clientLoggedIn = SessionManager.getInstance().checkClientLoggedIn(con);
         // Check client has logged in, and if username is NOT anonymous, username and secret match that stored locally
         boolean validClient = (clientLoggedIn && (username.equals("anonymous") || (username != null &&
-                secret != null && SessionManager.getInstance().secretIsCorrect(username, secret))));
+                secret != null && SessionManager.getInstance().getClientRegistry().secretCorrect(username, secret))));
 
         switch(command) {
 
@@ -168,6 +182,7 @@ public class MessageProcessor {
                 return null;
 
             // Server messages whereby sending server must be authenticated
+            case "AUTHENTICATION_SUCCESS":
             case "SERVER_ANNOUNCE":
             case "ACTIVITY_BROADCAST":
             case "LOCK_REQUEST":
@@ -182,7 +197,8 @@ public class MessageProcessor {
             case "LOGIN":
                 return null;
 
-            // Server message whereby sending server must be unauthenticated
+            // Server messages whereby sending server must be unauthenticated
+            case "AUTHENTICATE_SUCCESS":
             case "AUTHENTICATE":
                 if (serverAuthenticated) {
                     return "Server already authenticated, thus message is invalid. Now disconnecting.";
@@ -238,26 +254,6 @@ public class MessageProcessor {
         JSONObject msg = new JSONObject();
         msg.put("command", "INVALID_MESSAGE");
         msg.put("info", errorLog);
-        return msg.toString();
-    }
-
-    /** Creates an AUTHENTICATE message to be sent by a server to its parent server.
-     * @param secret The secret a server is trying to authenticate with
-     * @return msg the message to be sent to the parent server */
-    public static String getAuthenticateMsg(String secret) {
-        JSONObject msg = new JSONObject();
-        msg.put("command", "AUTHENTICATE");
-        msg.put("secret", secret);
-        return msg.toString();
-    }
-
-    /** Creates an AUTHENTICATION_FAIL message to be sent back to a server.
-     * @param secret The secret a server attempted to authenticate with
-     * @return Msg the message to be sent back to the server */
-    public static String getAuthenticationFailedMsg(String secret) {
-        JSONObject msg = new JSONObject();
-        msg.put("command", "AUTHENTICATION_FAIL");
-        msg.put("info", "the supplied secret is incorrect: " + secret);
         return msg.toString();
     }
 
@@ -362,6 +358,34 @@ public class MessageProcessor {
         msg.put("command", lockType);
         msg.put("username", username);
         msg.put("secret", secret);
+        return msg.toString();
+    }
+
+    /** Creates an AUTHENTICATE message to be sent by a server to its parent server.
+     * @param secret The secret a server is trying to authenticate with
+     * @return msg the message to be sent to the parent server */
+    public static String getAuthenticateMsg(String secret, JSONObject clientRecordsJson) {
+        JSONObject msg = new JSONObject();
+        msg.put("command", "AUTHENTICATE");
+        msg.put("secret", secret);
+        msg.putAll(clientRecordsJson);
+        return msg.toString();
+    }
+
+    /** Creates an AUTHENTICATION_FAIL message to be sent back to a server.
+     * @param secret The secret a server attempted to authenticate with
+     * @return Msg the message to be sent back to the server */
+    public static String getAuthenticationFailedMsg(String secret) {
+        JSONObject msg = new JSONObject();
+        msg.put("command", "AUTHENTICATION_FAIL");
+        msg.put("info", "the supplied secret is incorrect: " + secret);
+        return msg.toString();
+    }
+
+    public static String getAuthenticationSuccessMsg(JSONObject clientRecordsJson) {
+        JSONObject msg = new JSONObject();
+        msg.put("command", "AUTHENTICATION_SUCCESS");
+        msg.putAll(clientRecordsJson);
         return msg.toString();
     }
 }

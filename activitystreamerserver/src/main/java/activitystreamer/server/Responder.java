@@ -7,6 +7,7 @@ package activitystreamer.server;
 
 import activitystreamer.util.ServerCommand;
 import activitystreamer.util.Response;
+import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
 import java.util.Collections;
@@ -125,8 +126,20 @@ public class Responder {
                 public void execute(JSONObject json, Connection con) {
                     // Authenticate the server
                     SessionManager.getInstance().authenticateIncomingSever((String) json.get("secret"), con);
+                    JSONArray registry = (JSONArray) json.get("registry");
+                    SessionManager.getInstance().getClientRegistry().updateRecords(registry);
                 }
             });
+            responses.put("AUTHENTICATION_SUCCESS", new ServerCommand() {
+                @Override
+                public void execute(JSONObject json, Connection con) {
+                    JSONArray registry = (JSONArray) json.get("registry");
+                    SessionManager.getInstance().getClientRegistry().updateRecords(registry);
+                }
+
+            });
+
+
             /* Received an activity broadcast message from a server. Forward message on to all other connections, except
              * to the sending server. **/
             responses.put("ACTIVITY_BROADCAST", new ServerCommand() {

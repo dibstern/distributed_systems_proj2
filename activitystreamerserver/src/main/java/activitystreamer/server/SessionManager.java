@@ -86,6 +86,7 @@ public class SessionManager extends Thread {
         if (Settings.getRemoteHostname() != null) {
             try {
                 Connection con = outgoingConnection(new Socket(Settings.getRemoteHostname(), Settings.getRemotePort()));
+                connections.add(con);
                 authenticate(con);
                 log.info("connected to server on port number " + Settings.getRemotePort());
             }
@@ -104,7 +105,7 @@ public class SessionManager extends Thread {
      * @return If the message was successfully processed
      */
     public synchronized boolean process(Connection con, String msg) {
-        JSONObject json = MessageProcessor.toJson(msg);
+        JSONObject json = MessageProcessor.toJson(msg, false);
 
         // If we couldn't parse the message, notify the sender and disconnect
         if (json.containsKey("status") && ((String) json.get("status")).equals("failure")) {
@@ -112,18 +113,17 @@ public class SessionManager extends Thread {
         }
 
         log.info("Received Message: " + msg);
-        log.error("received message: " +msg);
 
         // Check that a message contains a valid command, and that it has the required fields
         String invalidMsgStructureMsg = MessageProcessor.hasValidCommandAndFields(json);
         if (invalidMsgStructureMsg != null) {
             return messageInvalid(con, invalidMsgStructureMsg);
         }
-
+        String command = json.get("command").toString();
         // If the message is an INVALID_MESSAGE or LOGOUT message, close the connection.
-        if (json.get("command").equals("INVALID_MESSAGE") || json.get("command").equals("LOGOUT")) {
+        if (command.equals("INVALID_MESSAGE") || command.equals("LOGOUT") || command.equals("AUTHENTICATION_FAIL")) {
             con.closeCon();
-            return true;        // true because we want terminate = true;
+            return true;        // true because we want terminate = true; makes con delete itself from SessionManager
         }
 
         // Check Authentication/Validation status - unless is an AUTHENTICATE MESSAGE or LOGIN message
@@ -133,7 +133,7 @@ public class SessionManager extends Thread {
          }
 
          // Process the message
-        return responder.process(MessageProcessor.toJson(msg), con);
+        return responder.process(MessageProcessor.toJson(msg, false), con);
     }
 
     /**
@@ -269,25 +269,27 @@ public class SessionManager extends Thread {
      * Sends an AUTHENTICATE message to that server with its secret.
      * @param c The connection the authenticate message will be send on **/
     public void authenticate(Connection c) {
-        String msg = MessageProcessor.getAuthenticateMsg(Settings.getSecret());
+        String msg = MessageProcessor.getAuthenticateMsg(Settings.getSecret(), clientRegistry.getRecordsJson());
         c.writeMsg(msg);
     }
 
     /** Authenticates a new server from incoming connection
      * @param incomingSecret The secret supplied by the authenticating server
      * @param c The connection a server is trying to authenticate on **/
-    public void authenticateIncomingSever(String incomingSecret, Connection c) {
+    public boolean authenticateIncomingSever(String incomingSecret, Connection c) {
 
         // Check if secret matches the secret of this server
-        String secret = Settings.getSecret();
-        if (!secret.equals(incomingSecret)) {
+        if (!Settings.getSecret().equals(incomingSecret)) {
             serverAuthenticateFailed(c, incomingSecret);
+            return false;
         }
         else {
             // Server supplied correct secret, remove from generic "holding" connections array and add to server
             // connections array
             connections.remove(c);
             serverConnections.add(c);
+            serverAuthenticateSuccess(c);
+            return true;
         }
     }
 
@@ -308,6 +310,11 @@ public class SessionManager extends Thread {
         String msg = MessageProcessor.getAuthenticationFailedMsg(secret);
         con.writeMsg(msg);
         closeConnection(con);
+    }
+
+    public void serverAuthenticateSuccess(Connection con) {
+        String msg = MessageProcessor.getAuthenticationSuccessMsg(clientRegistry.getRecordsJson());
+        con.writeMsg(msg);
     }
 
 
