@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
+import com.sun.deploy.util.SessionState;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -22,12 +24,12 @@ public class SessionManager extends Thread {
     private static ArrayList<Connection> connections;
     private static ArrayList<Connection> serverConnections;
     private static HashMap<Connection, ConnectedClient> clientConnections;
-    private static HashMap<String, String> clientRegistry;
     private static HashMap<String, ConnectedServer> serverInfo;
     private static boolean term = false;
     private static Listener listener;
     private static String serverId;
     private static Responder responder;
+    private static ConcurrentHashMap<String, ClientRecord> clientRegistry;
 
     protected static SessionManager sessionManager = null;
 
@@ -53,8 +55,8 @@ public class SessionManager extends Thread {
         // To store information about all know servers in a system
         serverInfo = new HashMap<String, ConnectedServer>();
 
-        // Store Username -> Password pairs, to check passwords in O(1)
-        clientRegistry = new HashMap<String, String>();
+        // Store information about all know clients in a system
+        clientRegistry = new ConcurrentHashMap<String, ClientRecord>();
 
         // Set server ID by randomly generating a string
         serverId = Settings.nextSecret();
@@ -110,6 +112,7 @@ public class SessionManager extends Thread {
         }
 
         log.info("Received Message: " + msg);
+        log.error("received message: " +msg);
 
         // Check that a message contains a valid command, and that it has the required fields
         String invalidMsgStructureMsg = MessageProcessor.hasValidCommandAndFields(json);
@@ -285,7 +288,6 @@ public class SessionManager extends Thread {
             // connections array
             connections.remove(c);
             serverConnections.add(c);
-
         }
     }
 
@@ -330,8 +332,10 @@ public class SessionManager extends Thread {
      */
     public boolean secretIsCorrect(String username, String password) {
         // Retrieve password stored for user from local storage
+
         if (clientRegistry.containsKey(username)) {
-            String storedPassword = clientRegistry.get(username);
+            ClientRecord client = clientRegistry.get(username);
+            String storedPassword = client.getSecret();
             return storedPassword.equals(password);
         }
         return false;
@@ -390,11 +394,11 @@ public class SessionManager extends Thread {
         // Send login success message (Registered & Correct combo) & check for redirection
         if (logged_in) {
             String msg = MessageProcessor.getLoginSuccessMsg(username);
+            log.error("about to call login success message\n");
             c.writeMsg(msg);
 
             // Check if client should be redirected to another server
             checkRedirectClient(c);
-
         }
         // username & secret either not stored locally or client registration is incomplete. Send login failed message.
         else {
@@ -427,6 +431,7 @@ public class SessionManager extends Thread {
         for (ConnectedServer server : serverInfo.values()) {
             if (server.getLoad() <= load - 2) {
                 String msg = MessageProcessor.getRedirectMsg(server.getHostname(), server.getPort());
+                log.error("about to call redirect message\n");
                 c.writeMsg(msg);
                 clientConnections.remove(c);
                 break;
@@ -506,7 +511,8 @@ public class SessionManager extends Thread {
      * @param username The username a client is registering with
      * @param secret The secret a client is registering with **/
     public void registerUserSecret(String username, String secret) {
-        clientRegistry.put(username, secret);
+        ClientRecord newClient = new ClientRecord(username, secret);
+        clientRegistry.put(username, newClient);
     }
 
     /** Checks all of the username's registered with the client to see if it already exists.
@@ -530,8 +536,14 @@ public class SessionManager extends Thread {
      * @return True if has registered, false otherwise.
      */
     public boolean isRegistered(String username, String secret) {
-        if (clientRegistry.containsKey(username) && clientRegistry.get(username).equals(secret)) {
-            return true;
+
+        if (clientRegistry.containsKey(username))
+        {
+            String clientSecret = clientRegistry.get(username).getSecret();
+            if (clientSecret.equals(secret))
+            {
+                return true;
+            }
         }
         return false;
     }
