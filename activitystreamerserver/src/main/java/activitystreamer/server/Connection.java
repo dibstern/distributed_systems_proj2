@@ -81,17 +81,17 @@ public class Connection extends Thread {
         try {
             String data;
             while (!term && (data = inreader.readLine()) != null) {
-                term = Control.getInstance().process(this, data);
+                term = SessionManager.getInstance().process(this, data);
                 System.out.println("Receiving: " + data);
             }
             log.debug("connection closed to " + Settings.socketAddress(socket));
-            Control.getInstance().deleteClosedConnection(this);
+            SessionManager.getInstance().deleteClosedConnection(this);
             in.close();
             // retry = false;
         }
         catch (IOException e) {
             log.error("connection " + Settings.socketAddress(socket) + " closed with exception: " + e);
-            Control.getInstance().deleteClosedConnection(this);
+            SessionManager.getInstance().deleteClosedConnection(this);
         }
         open = false;
     }

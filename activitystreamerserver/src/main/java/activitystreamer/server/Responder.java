@@ -13,7 +13,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public class ServerSessionHandler {
+public class Responder {
 
     /**
      * @param json The JSON object received from the client
@@ -42,12 +42,12 @@ public class ServerSessionHandler {
 
                     if (username.equals("anonymous")) {
                         // Do not need to check secret against username as is anonymous - login client
-                        Control.getInstance().loginAnonymousClient(con, username);
+                        SessionManager.getInstance().loginAnonymousClient(con, username);
                     }
                     else {
                         // Client logging in with username - check secret and username matches what is stored
                         String secret = (String) json.get("secret");
-                        Control.getInstance().loginClient(con, username, secret);
+                        SessionManager.getInstance().loginClient(con, username, secret);
                     }
                 }
             });
@@ -58,7 +58,7 @@ public class ServerSessionHandler {
             responses.put("LOGOUT", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
-                    Control.getInstance().deleteClosedConnection(con);
+                    SessionManager.getInstance().deleteClosedConnection(con);
                 }
             });
             /* An activity message has been received from a client, and already checked to ensure it is valid, the client
@@ -75,7 +75,7 @@ public class ServerSessionHandler {
 
                     // Broadcast to all connections that aren't the sender
                     String activityBroadcastMsg = MessageProcessor.getActivityBroadcastMsg(activityMessage);
-                    Control.getInstance().broadcastMessage(con, activityBroadcastMsg);
+                    SessionManager.getInstance().broadcastMessage(con, activityBroadcastMsg);
 
                     // Send back an ACTIVITY_MESSAGE to the sender, so it can display it on its GUI
                     String processedActivityMsg = MessageProcessor.getActivityMessage(activityMessage);
@@ -94,14 +94,14 @@ public class ServerSessionHandler {
                     String secret = (String) json.get("secret");
 
                     // If server already knows of username then the registration fails
-                    if (Control.getInstance().usernameExists(username)) {
-                        Control.getInstance().registrationFailed(username, secret, con);
+                    if (SessionManager.getInstance().usernameExists(username)) {
+                        SessionManager.getInstance().registrationFailed(username, secret, con);
                     }
                     // Username not known to this server - send out a lock request to all servers connected to
                     // and add username and secret to it's database
                     else {
-                        Control.getInstance().registerUserSecret(username, secret);
-                        Control.getInstance().registerNewClient(con, username, secret);
+                        SessionManager.getInstance().registerUserSecret(username, secret);
+                        SessionManager.getInstance().registerNewClient(con, username, secret);
                     }
                 }
             });
@@ -112,7 +112,7 @@ public class ServerSessionHandler {
             responses.put("INVALID_MESSAGE", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
-                    Control.getInstance().deleteClosedConnection(con);
+                    SessionManager.getInstance().deleteClosedConnection(con);
                 }
             });
 
@@ -123,7 +123,7 @@ public class ServerSessionHandler {
                 @Override
                 public void execute(JSONObject json, Connection con) {
                     // Authenticate the server
-                    Control.getInstance().authenticateIncomingSever((String) json.get("secret"), con);
+                    SessionManager.getInstance().authenticateIncomingSever((String) json.get("secret"), con);
                 }
             });
             /* Received an activity broadcast message from a server. Forward message on to all other connections, except
@@ -131,7 +131,7 @@ public class ServerSessionHandler {
             responses.put("ACTIVITY_BROADCAST", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
-                    Control.getInstance().broadcastMessage(con, json.toString());
+                    SessionManager.getInstance().broadcastMessage(con, json.toString());
                 }
             });
             /* Server announce message received from another server. Update information about this server, then forward
@@ -147,10 +147,10 @@ public class ServerSessionHandler {
                     int port = ((Long) json.get("port")).intValue();
 
                     // Update this server's information about the given server
-                    Control.getInstance().updateServerInfo(id, load, hostname, port);
+                    SessionManager.getInstance().updateServerInfo(id, load, hostname, port);
 
                     // Forward to all other servers that this server is connected to
-                    Control.getInstance().forwardServerMsg(con, json.toString());
+                    SessionManager.getInstance().forwardServerMsg(con, json.toString());
                 }
             });
             /* A server on the network is trying to register a new user. Check if username exists on this server, and
@@ -161,7 +161,7 @@ public class ServerSessionHandler {
                     String username = (String) json.get("username");
                     String secret = (String) json.get("secret");
 
-                    Control serverController = Control.getInstance();
+                    SessionManager serverController = SessionManager.getInstance();
 
                     // Firstly, if username exists then broadcast a LOCK_DENIED message // TODO: Aaron said this on LMS
                     if (serverController.usernameExists(username)) {
@@ -188,15 +188,15 @@ public class ServerSessionHandler {
                     String secret = (String) json.get("secret");
 
                     // If the user/secret combination is in our registry, remove the combo from our local storage
-                    if (Control.getInstance().isRegistered(username, secret)) {
+                    if (SessionManager.getInstance().isRegistered(username, secret)) {
                         // Remove the username from the registry
-                        Control.getInstance().removeUser(username);
+                        SessionManager.getInstance().removeUser(username);
                     }
                     // If it's one of our connections, send REGISTRATION_FAILED message
-                    Control.getInstance().registrationFailed(username, secret, con);
+                    SessionManager.getInstance().registrationFailed(username, secret, con);
 
                     // Forward the LOCK_DENIED message to all other connections
-                    Control.getInstance().broadcastMessage(con, json.toString());
+                    SessionManager.getInstance().broadcastMessage(con, json.toString());
                 }
             });
 
@@ -211,8 +211,8 @@ public class ServerSessionHandler {
                     String secret = (String) json.get("secret");
 
                     // Update if we're the sender of the request, else forward LOCK_ALLOWED to all servers except sender
-                    if (!Control.getInstance().updateIfSender(username, secret)) {
-                        Control.getInstance().forwardServerMsg(con, json.toString());
+                    if (!SessionManager.getInstance().updateIfSender(username, secret)) {
+                        SessionManager.getInstance().forwardServerMsg(con, json.toString());
                     }
                 }
             });

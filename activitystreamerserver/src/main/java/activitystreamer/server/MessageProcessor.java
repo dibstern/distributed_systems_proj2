@@ -144,11 +144,11 @@ public class MessageProcessor {
         }
 
         // Check that the server is authenticated OR client logged in, depending on connection type
-        boolean serverAuthenticated = Control.getInstance().checkServerAuthenticated(con);
-        boolean clientLoggedIn = Control.getInstance().checkClientLoggedIn(con);
+        boolean serverAuthenticated = SessionManager.getInstance().checkServerAuthenticated(con);
+        boolean clientLoggedIn = SessionManager.getInstance().checkClientLoggedIn(con);
         // Check client has logged in, and if username is NOT anonymous, username and secret match that stored locally
         boolean validClient = (clientLoggedIn && (username.equals("anonymous") || (username != null &&
-                secret != null && Control.getInstance().secretIsCorrect(username, secret))));
+                secret != null && SessionManager.getInstance().secretIsCorrect(username, secret))));
 
         switch(command) {
 

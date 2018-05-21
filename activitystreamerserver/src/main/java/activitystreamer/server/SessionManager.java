@@ -15,9 +15,9 @@ import org.json.simple.JSONObject;
 /**
  * This class is responsible for coordinating the receival of messages on a network, having the server process the
  * messages and acting on each message. The class also maintains the server's local storage.
- * Control uses a Listener and Connection(s). Seems like server logic is implemented here.
+ * SessionManager uses a Listener and Connection(s). Seems like server logic is implemented here.
  */
-public class Control extends Thread {
+public class SessionManager extends Thread {
     private static final Logger log = LogManager.getLogger();
     private static ArrayList<Connection> connections;
     private static ArrayList<Connection> serverConnections;
@@ -27,21 +27,21 @@ public class Control extends Thread {
     private static boolean term = false;
     private static Listener listener;
     private static String serverId;
-    private static ServerSessionHandler sessionHandler;
+    private static Responder responder;
 
-    protected static Control control = null;
+    protected static SessionManager sessionManager = null;
 
-    public static Control getInstance() {
-        if (control == null) {
-            control = new Control();
+    public static SessionManager getInstance() {
+        if (sessionManager == null) {
+            sessionManager = new SessionManager();
         }
-        return control;
+        return sessionManager;
     }
 
     /**
      * Initialise all required data structures and components of a server
      */
-    public Control() {
+    public SessionManager() {
 
         // To store unauthenticated server connections & not yet logged in client connections
         connections = new ArrayList<Connection>();
@@ -59,7 +59,7 @@ public class Control extends Thread {
         // Set server ID by randomly generating a string
         serverId = Settings.nextSecret();
 
-        sessionHandler = new ServerSessionHandler();
+        responder = new Responder();
 
         // start a listener - keeps listening until ...?
         try {
@@ -129,7 +129,7 @@ public class Control extends Thread {
          }
 
          // Process the message
-        return sessionHandler.process(MessageProcessor.toJson(msg), con);
+        return responder.process(MessageProcessor.toJson(msg), con);
     }
 
     /**
@@ -161,7 +161,7 @@ public class Control extends Thread {
     }
 
     /**
-     * Runs the server Control. Sends regular SERVER_ANNOUNCE messages to all servers on the network at a given time
+     * Runs the server SessionManager. Sends regular SERVER_ANNOUNCE messages to all servers on the network at a given time
      * interval.
      */
     @Override
@@ -288,7 +288,7 @@ public class Control extends Thread {
         }
     }
 
-    /** Called by ServerSessionHandler to determine if a given server is authenticated.
+    /** Called by Responder to determine if a given server is authenticated.
      * Checks server connections array list for the connection. If in this array list, server is authenticated and
      * returns true, otherwise not authenticated and returns falls.
      * @param c The connection we are checking for authentication**/
