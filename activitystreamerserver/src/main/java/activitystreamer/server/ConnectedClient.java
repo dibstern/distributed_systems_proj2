@@ -43,9 +43,9 @@ public class ConnectedClient {
         }
         this.lockRequestServerCount -= 1;
         if (this.lockRequestServerCount == 0) {
-            this.registered = true;
+            register();
         }
-        return this.registered;
+        return isRegistered();
     }
 
     /*
@@ -62,6 +62,10 @@ public class ConnectedClient {
 
     public boolean isClient(String username, String secret) {
         return this.username.equals(username) && this.secret.equals(secret);
+    }
+
+    public void register() {
+        this.registered = true;
     }
 
     public boolean isRegistered() {
