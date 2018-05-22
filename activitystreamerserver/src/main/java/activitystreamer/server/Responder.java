@@ -78,12 +78,6 @@ public class Responder {
 
                     SessionManager sessionManager = SessionManager.getInstance();
 
-                    // NEW
-                    /*
-                    1. Get the next expected token from the client registry (updating it in the process) and add to msg
-                    2. Get the list of connected users and add to the msg.
-                    3. Save this in the ClientRegistry
-                     */
                     // Retrieve the logged in users (known to the clientRegistry at this time)
                     ArrayList<String> loggedInUsers = sessionManager.getClientRegistry().getLoggedInUsers();
 
@@ -95,7 +89,7 @@ public class Responder {
                                                                                            loggedInUsers, msgToken);
 
                     // Broadcast to all connections that aren't the sender
-                    // TODO: Send to clients and update ClientRegistry, and send ACKs. 
+                    // TODO: Send to clients and update ClientRegistry, and send ACKs.
                     sessionManager.broadcastMessage(con, activityBroadcastMsg);
 
                     // Send back an ACTIVITY_MESSAGE to the sender, so it can display it on its GUI
