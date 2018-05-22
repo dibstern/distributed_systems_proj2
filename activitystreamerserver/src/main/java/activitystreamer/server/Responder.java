@@ -95,6 +95,7 @@ public class Responder {
                                                                                            loggedInUsers, msgToken);
 
                     // Broadcast to all connections that aren't the sender
+                    // TODO: Send to clients and update ClientRegistry, and send ACKs. 
                     sessionManager.broadcastMessage(con, activityBroadcastMsg);
 
                     // Send back an ACTIVITY_MESSAGE to the sender, so it can display it on its GUI
