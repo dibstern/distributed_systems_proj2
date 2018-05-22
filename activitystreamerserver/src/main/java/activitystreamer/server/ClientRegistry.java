@@ -32,6 +32,7 @@ public class ClientRegistry {
      * @param ...
      */
     public void updateRecords(JSONArray registry) {
+
         // Iterate through Array
         registry.forEach((clientRecordObject) -> {
 
@@ -77,7 +78,9 @@ public class ClientRegistry {
         // Convert ArrayList into JSONArray String
         Gson gson = new Gson();
         String jsonArrayString = gson.toJson(recordArray);
-        return MessageProcessor.toJson(jsonArrayString, true);
+
+        // Returns a JSONObject
+        return MessageProcessor.toJson(jsonArrayString, true, "registry");
     }
 
 
@@ -117,5 +120,33 @@ public class ClientRegistry {
 
     public void removeUser(String username) {
         clientRecords.remove(username);
+    }
+
+
+    /**
+     * Add message and its expected recipients to ClientRegistry and retrieve the allocated token
+     * @param user The user sending the activity message.
+     * @param msg The authenticated activity message.
+     * @return Integer representing the token assigned to the newly received message
+     */
+    public Integer registerSentMessage(String user, JSONObject msg, ArrayList<String> loggedInUsers) {
+        ClientRecord record = clientRecords.get(user);
+        return record.addSentMessage(msg, loggedInUsers);
+    }
+
+    /**
+     * Retrieve a list of all of the ClientRecords that are "logged in"
+     *
+     * @return ArrayList<String> An ArrayList of Strings, each representing a user that is logged in, according to this
+     * ClientRegistry instance.
+     */
+    public ArrayList<String> getLoggedInUsers() {
+        ArrayList<String> loggedInUsers = new ArrayList<String>();
+        this.clientRecords.forEach((username, clientRecord) -> {
+            if (clientRecord.loggedIn()) {
+                loggedInUsers.add(username);
+            }
+        });
+        return loggedInUsers;
     }
 }

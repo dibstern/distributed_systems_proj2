@@ -1,15 +1,20 @@
 package activitystreamer.server;
 
+import com.google.gson.Gson;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
+
+import java.util.ArrayList;
 
 /** This class is responsible for generating all of the messages to be sent by the server across the network.
  * It also checks that each message is valid/non-corrupt, and came from an authenticated server or a client that
  * has logged in. Class also handles the conversion of a string to a JSON object. **/
 
 public class MessageProcessor {
+
+    private static Gson gson = new Gson();
 
     /**
      * Validates incoming messages (ensures they have the correct fields)
@@ -67,7 +72,7 @@ public class MessageProcessor {
                 return (containsActivity ? null : missingFieldMsg);
             case "SERVER_ANNOUNCE":
                 return ((json.containsKey("id") && json.containsKey("load") && json.containsKey("hostname") &&
-                        json.containsKey("port")) ? null : missingFieldMsg);
+                        json.containsKey("port") && json.containsKey("registry")) ? null : missingFieldMsg);
             case "AUTHENTICATION_FAIL":
             case "INVALID_MESSAGE":
                 return (json.containsKey("info") ? null : missingFieldMsg);
@@ -134,6 +139,12 @@ public class MessageProcessor {
                 return "load field is not a number";
             }
         }
+        if (json.containsKey("registry")) {
+            o = json.get("registry");
+            if (!(o instanceof JSONArray)) {
+                return "the registry field is not a JSONArray";
+            }
+        }
         return null;
     }
 
@@ -160,6 +171,7 @@ public class MessageProcessor {
         // Check that the server is authenticated OR client logged in, depending on connection type
         boolean serverAuthenticated = SessionManager.getInstance().checkServerAuthenticated(con);
         boolean clientLoggedIn = SessionManager.getInstance().checkClientLoggedIn(con);
+
         // Check client has logged in, and if username is NOT anonymous, username and secret match that stored locally
         boolean validClient = (clientLoggedIn && (username.equals("anonymous") || (username != null &&
                 secret != null && SessionManager.getInstance().getClientRegistry().secretCorrect(username, secret))));
@@ -215,7 +227,7 @@ public class MessageProcessor {
      * @param data The string, hopefully formatted as a JSON object, to be parsed.
      * @return A JSONObject containing the data included in the string, or a specific error response.
      */
-    public static JSONObject toJson(String data, boolean dataIsArray) {
+    public static JSONObject toJson(String data, boolean dataIsArray, String keyString) {
 
         JSONParser parser = new JSONParser();
         JSONObject json;
@@ -224,7 +236,7 @@ public class MessageProcessor {
             if (dataIsArray) {
                 JSONArray jsonData = (JSONArray) parser.parse(data);
                 json = new JSONObject();
-                json.put("registry", dataIsArray);
+                json.put(keyString, dataIsArray);
                 return json;
             }
             return (JSONObject) parser.parse(data);
@@ -277,32 +289,6 @@ public class MessageProcessor {
         msg.put("command", "REDIRECT");
         msg.put("hostname", hostName);
         msg.put("port", portNum);
-        return msg.toString();
-    }
-
-    /** Creates a SERVER_ANNOUNCE message to be sent to all servers in the network.
-     * @param id The sending server's id
-     * @param load The number of client connections a server currently has
-     * @param hostName The sending server's host name
-     * @param portnum The sending server's port number
-     * @return Msg the message to be sent to all servers on the network */
-    public static String getServerAnnounceMsg(String id, int load, String hostName, int portnum) {
-        JSONObject msg = new JSONObject();
-        msg.put("command", "SERVER_ANNOUNCE");
-        msg.put("id", id);
-        msg.put("load", load);
-        msg.put("hostname", hostName);
-        msg.put("port", portnum);
-        return msg.toString();
-    }
-
-    /** Creates an ACTIVITY_BROADCAST message to be sent across the network.
-     * @param json The activity message
-     * @return Msg the message to be sent across the network*/
-    public static String getActivityBroadcastMsg(JSONObject json) {
-        JSONObject msg = new JSONObject();
-        msg.put("command", "ACTIVITY_BROADCAST");
-        msg.put("activity", json);
         return msg.toString();
     }
 
@@ -363,11 +349,14 @@ public class MessageProcessor {
 
     /** Creates an AUTHENTICATE message to be sent by a server to its parent server.
      * @param secret The secret a server is trying to authenticate with
+     * @param clientRecordsJson The ClientRegistry as a JSONArray in a JSON object -> {"registry" : JSONArray[...]}
      * @return msg the message to be sent to the parent server */
     public static String getAuthenticateMsg(String secret, JSONObject clientRecordsJson) {
         JSONObject msg = new JSONObject();
         msg.put("command", "AUTHENTICATE");
         msg.put("secret", secret);
+
+        // Adds all mappings in clientRecordsJson to msg (only "registry" is mapped to a value)
         msg.putAll(clientRecordsJson);
         return msg.toString();
     }
@@ -385,7 +374,45 @@ public class MessageProcessor {
     public static String getAuthenticationSuccessMsg(JSONObject clientRecordsJson) {
         JSONObject msg = new JSONObject();
         msg.put("command", "AUTHENTICATION_SUCCESS");
+
+        // Adds all mappings in clientRecordsJson to msg (only "registry" is mapped to a value)
         msg.putAll(clientRecordsJson);
+        return msg.toString();
+    }
+
+
+    /** Creates a SERVER_ANNOUNCE message to be sent to all servers in the network.
+     * @param id The sending server's id
+     * @param load The number of client connections a server currently has
+     * @param hostName The sending server's host name
+     * @param portNum The sending server's port number
+     * @param clientRecordsJson The ClientRegistry as a JSONArray in a JSON object -> {"registry" : JSONArray[...]}
+     * @return Msg the message to be sent to all servers on the network */
+    public static String getServerAnnounceMsg(String id, int load, String hostName, int portNum,
+                                              JSONObject clientRecordsJson) {
+        JSONObject msg = new JSONObject();
+        msg.put("command", "SERVER_ANNOUNCE");
+        msg.put("id", id);
+        msg.put("load", load);
+        msg.put("hostname", hostName);
+        msg.put("port", portNum);
+        msg.putAll(clientRecordsJson);
+        return msg.toString();
+    }
+
+    /** Creates an ACTIVITY_BROADCAST message to be sent across the network.
+     * @param json The activity message
+     * @return Msg the message to be sent across the network*/
+    public static String getActivityBroadcastMsg(JSONObject json, ArrayList<String> loggedInUsers, Integer msgToken) {
+        JSONObject msg = new JSONObject();
+        msg.put("command", "ACTIVITY_BROADCAST");
+        msg.put("activity", json);
+        msg.put("token", msgToken);
+
+        // TODO: Check that the static Gson works
+        // Gson gson = new Gson();
+        JSONObject recipientsJson = toJson(MessageProcessor.gson.toJson(loggedInUsers), true, "recipients");
+        msg.putAll(recipientsJson);
         return msg.toString();
     }
 }

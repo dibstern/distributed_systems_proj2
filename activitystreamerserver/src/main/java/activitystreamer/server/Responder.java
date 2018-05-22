@@ -10,6 +10,7 @@ import activitystreamer.util.Response;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -71,12 +72,30 @@ public class Responder {
                 public void execute(JSONObject json, Connection con) {
 
                     // `Process` the message
+                    String user = json.get("username").toString();
                     JSONObject activityMessage = (JSONObject) json.get("activity");
-                    activityMessage.put("authenticated_user", json.get("username").toString());
+                    activityMessage.put("authenticated_user", user);
+
+                    SessionManager sessionManager = SessionManager.getInstance();
+
+                    // NEW
+                    /*
+                    1. Get the next expected token from the client registry (updating it in the process) and add to msg
+                    2. Get the list of connected users and add to the msg.
+                    3. Save this in the ClientRegistry
+                     */
+                    // Retrieve the logged in users (known to the clientRegistry at this time)
+                    ArrayList<String> loggedInUsers = sessionManager.getClientRegistry().getLoggedInUsers();
+
+                    // Add message and its expected recipients to ClientRegistry and retrieve the allocated token
+                    Integer msgToken = sessionManager.getClientRegistry().registerSentMessage(user, activityMessage,
+                                                                                              loggedInUsers);
+                    // Add message token & recipients to ACTIVITY_BROADCAST message
+                    String activityBroadcastMsg = MessageProcessor.getActivityBroadcastMsg(activityMessage,
+                                                                                           loggedInUsers, msgToken);
 
                     // Broadcast to all connections that aren't the sender
-                    String activityBroadcastMsg = MessageProcessor.getActivityBroadcastMsg(activityMessage);
-                    SessionManager.getInstance().broadcastMessage(con, activityBroadcastMsg);
+                    sessionManager.broadcastMessage(con, activityBroadcastMsg);
 
                     // Send back an ACTIVITY_MESSAGE to the sender, so it can display it on its GUI
                     String processedActivityMsg = MessageProcessor.getActivityMessage(activityMessage);
@@ -145,7 +164,14 @@ public class Responder {
             responses.put("ACTIVITY_BROADCAST", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
+
+                    // TODO: 1. Send only if tokens are matching and msg is unsent,
+                    // TODO: 2. Update ClientRegistry's ClientRecords.expected_tokens,
+                    // TODO: 3. Send all waiting msgs if appropriate
+                    // TODO: 4. Create and send ACK messages after sending to clients
+                    // TODO: 5. Create Ability to process ACK messages and update ClientRegistry based on these ACKs.
                     SessionManager.getInstance().broadcastMessage(con, json.toString());
+
                 }
             });
             /* Server announce message received from another server. Update information about this server, then forward
@@ -159,10 +185,12 @@ public class Responder {
                     int load = ((Long) json.get("load")).intValue();
                     String hostname = (String) json.get("hostname");
                     int port = ((Long) json.get("port")).intValue();
+                    JSONArray newClientRegistry = (JSONArray) json.get("registry");
 
                     // Update this server's information about the given server
                     SessionManager sessionManager = SessionManager.getInstance();
                     sessionManager.updateServerInfo(id, load, hostname, port);
+                    sessionManager.getClientRegistry().updateRecords(newClientRegistry);
 
                     // Forward to all other servers that this server is connected to
                     sessionManager.forwardServerMsg(con, json.toString());

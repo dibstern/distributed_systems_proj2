@@ -105,7 +105,7 @@ public class SessionManager extends Thread {
      * @return If the message was successfully processed
      */
     public synchronized boolean process(Connection con, String msg) {
-        JSONObject json = MessageProcessor.toJson(msg, false);
+        JSONObject json = MessageProcessor.toJson(msg, false, "status");
 
         // If we couldn't parse the message, notify the sender and disconnect
         if (json.containsKey("status") && ((String) json.get("status")).equals("failure")) {
@@ -133,7 +133,7 @@ public class SessionManager extends Thread {
          }
 
          // Process the message
-        return responder.process(MessageProcessor.toJson(msg, false), con);
+        return responder.process(MessageProcessor.toJson(msg, false, "status"), con);
     }
 
     /**
@@ -234,7 +234,8 @@ public class SessionManager extends Thread {
         int port = Settings.getLocalPort();
         String hostname = Settings.getLocalHostname();
 
-        String msg = MessageProcessor.getServerAnnounceMsg(serverId, load, hostname, port);
+        String msg = MessageProcessor.getServerAnnounceMsg(serverId, load, hostname, port,
+                                                           clientRegistry.getRecordsJson());
         serverBroadcast(msg);
     }
 
