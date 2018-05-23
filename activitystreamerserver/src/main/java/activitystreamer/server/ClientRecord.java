@@ -13,8 +13,7 @@ public class ClientRecord {
     private Integer logged_in;
 
     // Maps usernames to the next expected message token (the token of the next message that the user has not received)
-    public static enum DELIVERY { SEND, SENT, NO_SEND
-    };
+    public static enum DELIVERY { SEND, SENT, NO_SEND}
     private ConcurrentHashMap<String, ConcurrentHashMap<Integer, DELIVERY>> expected_tokens;
 
     // Maps tokens to JSONObject messages
@@ -49,7 +48,6 @@ public class ClientRecord {
                 this.sent_messages.put(token, jsonMsg);
             }
         });
-
     }
 
     /**

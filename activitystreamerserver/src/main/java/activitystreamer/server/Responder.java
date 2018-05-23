@@ -40,6 +40,8 @@ public class Responder {
                 @Override
                 public void execute(JSONObject json, Connection con) {
 
+                    // TODO: Register Login status with ClientRegistry
+
                     String username = (String) json.get("username");
 
                     if (username.equals("anonymous")) {
@@ -60,6 +62,7 @@ public class Responder {
             responses.put("LOGOUT", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
+                    // TODO: Register Logout status with ClientRegistry
                     SessionManager.getInstance().deleteClosedConnection(con);
                 }
             });
@@ -89,7 +92,14 @@ public class Responder {
                                                                                            loggedInUsers, msgToken);
 
                     // Broadcast to all connections that aren't the sender
-                    // TODO: Send to clients and update ClientRegistry, and send ACKs.
+                    // TODO: Send Message to Clients and update ClientRegistry, and send ACKs.
+                    // TODO: Send Message to other Servers
+                    // TODO: REPORT - Cannot avoid problems if server crashes before sending out message
+                    // TODO: Make sure we send the messages only if the token matches
+                    // TODO: Make sure we send proceeding messages if they exist in the ClientRegistry and the user
+                    // TODO:       is supposed to receive them (based on DELIVERY)
+                    // TODO: Update the ClientRegistry with the ACK(s?)
+                    // TODO: Bundle all client ACKs
                     sessionManager.broadcastMessage(con, activityBroadcastMsg);
 
                     // Send back an ACTIVITY_MESSAGE to the sender, so it can display it on its GUI

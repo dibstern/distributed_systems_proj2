@@ -76,8 +76,7 @@ public class ClientRegistry {
         clientRecords.forEach((username, record) -> recordArray.add(record));
 
         // Convert ArrayList into JSONArray String
-        Gson gson = new Gson();
-        String jsonArrayString = gson.toJson(recordArray);
+        String jsonArrayString = MessageProcessor.getGson().toJson(recordArray);
 
         // Returns a JSONObject
         return MessageProcessor.toJson(jsonArrayString, true, "registry");

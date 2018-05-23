@@ -14,7 +14,8 @@ import java.util.ArrayList;
 
 public class MessageProcessor {
 
-    private static Gson gson = new Gson();
+    private static Gson gson = null;
+    private static JSONParser jsonParser = null;
 
     /**
      * Validates incoming messages (ensures they have the correct fields)
@@ -229,17 +230,16 @@ public class MessageProcessor {
      */
     public static JSONObject toJson(String data, boolean dataIsArray, String keyString) {
 
-        JSONParser parser = new JSONParser();
         JSONObject json;
 
         try {
             if (dataIsArray) {
-                JSONArray jsonData = (JSONArray) parser.parse(data);
+                JSONArray jsonData = (JSONArray) getJsonParser().parse(data);
                 json = new JSONObject();
                 json.put(keyString, dataIsArray);
                 return json;
             }
-            return (JSONObject) parser.parse(data);
+            return (JSONObject) getJsonParser().parse(data);
         }
         catch (ParseException e) {
             e.printStackTrace();
@@ -408,11 +408,22 @@ public class MessageProcessor {
         msg.put("command", "ACTIVITY_BROADCAST");
         msg.put("activity", json);
         msg.put("token", msgToken);
-
-        // TODO: Check that the static Gson works
-        // Gson gson = new Gson();
-        JSONObject recipientsJson = toJson(MessageProcessor.gson.toJson(loggedInUsers), true, "recipients");
+        JSONObject recipientsJson = toJson(MessageProcessor.getGson().toJson(loggedInUsers), true, "recipients");
         msg.putAll(recipientsJson);
         return msg.toString();
+    }
+
+    public static Gson getGson() {
+        if (gson == null) {
+            gson = new Gson();
+        }
+        return gson;
+    }
+
+    public static JSONParser getJsonParser() {
+        if (jsonParser == null) {
+            jsonParser = new JSONParser();
+        }
+        return jsonParser;
     }
 }
