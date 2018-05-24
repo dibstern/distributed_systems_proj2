@@ -1,8 +1,10 @@
 package activitystreamer.server;
 
+import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
 import java.util.ArrayList;
+import java.util.PriorityQueue;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ClientRecord {
@@ -13,11 +15,10 @@ public class ClientRecord {
     private Integer logged_in;
 
     // Maps usernames to the next expected message token (the token of the next message that the user has not received)
-    public static enum DELIVERY { SEND, SENT, NO_SEND}
-    private ConcurrentHashMap<String, ConcurrentHashMap<Integer, DELIVERY>> expected_tokens;
+    private ConcurrentHashMap<String, PriorityQueue<Integer>> expected_tokens;
 
     // Maps tokens to JSONObject messages
-    private ConcurrentHashMap<Integer, JSONObject> sent_messages;
+    private ConcurrentHashMap<Integer, JSONObject> messages;
 
 
     public ClientRecord(String username, String secret) {
@@ -25,8 +26,8 @@ public class ClientRecord {
         this.secret = secret;
         this.next_token_num = 1;
         this.logged_in = 1;
-        this.expected_tokens = new ConcurrentHashMap<String, ConcurrentHashMap<Integer, DELIVERY>>();
-        this.sent_messages = new ConcurrentHashMap<Integer, JSONObject>();
+        this.expected_tokens = new ConcurrentHashMap<String, PriorityQueue<Integer>>();
+        this.messages = new ConcurrentHashMap<Integer, JSONObject>();
     }
 
     public ClientRecord(JSONObject clientRecordJson) {
@@ -35,17 +36,17 @@ public class ClientRecord {
         this.next_token_num = ((Long) clientRecordJson.get("next_token_num")).intValue();
         this.logged_in = ((Long) clientRecordJson.get("logged_in")).intValue();
         this.expected_tokens = toTokenDeliveryMap((JSONObject) clientRecordJson.get("expected_tokens"));
-        this.sent_messages = toSentMessagesHashMap((JSONObject) clientRecordJson.get("sent_messages"));
+        this.messages = toSentMessagesHashMap((JSONObject) clientRecordJson.get("messages"));
     }
 
     /**
      *
-     * @param sent_messages_record
+     * @param receivedMessagesRecord
      */
-    public void updateMessagesSent(ConcurrentHashMap<Integer, JSONObject> sent_messages_record) {
-        sent_messages_record.forEach((token, jsonMsg) -> {
-            if (!this.sent_messages.containsKey(token)) {
-                this.sent_messages.put(token, jsonMsg);
+    public void updateMessages(ConcurrentHashMap<Integer, JSONObject> receivedMessagesRecord) {
+        receivedMessagesRecord.forEach((token, jsonMsg) -> {
+            if (!this.messages.containsKey(token)) {
+                this.messages.put(token, jsonMsg);
             }
         });
     }
@@ -67,12 +68,11 @@ public class ClientRecord {
 
         // Update Tokens
         JSONObject expectedTokensJson = (JSONObject) registryObject.get("expected_tokens");
-        ConcurrentHashMap<String, ConcurrentHashMap<Integer, DELIVERY>> newExpectedTokens =
-                toTokenDeliveryMap(expectedTokensJson);
-        updateTokens(newExpectedTokens);
+        ConcurrentHashMap<String, PriorityQueue<Integer>> receivedTokenMap = toTokenDeliveryMap(expectedTokensJson);
+        updateTokens(receivedTokenMap);
 
-        // Update sent messages
-        JSONObject sentMessagesJson = (JSONObject) registryObject.get("sent_messages");
+        // Update sent messages (MUST be updated after tokens)
+        JSONObject sentMessagesJson = (JSONObject) registryObject.get("messages");
         ConcurrentHashMap<Integer, JSONObject> newSentMessages = toSentMessagesHashMap(sentMessagesJson);
         updateSentMessages(newSentMessages);
     }
@@ -98,8 +98,8 @@ public class ClientRecord {
      */
     private void updateSentMessages(ConcurrentHashMap<Integer, JSONObject> sentMessages) {
         sentMessages.forEach((token, msg) -> {
-            if (!this.sent_messages.containsKey(token)) {
-                this.sent_messages.put(token, msg);
+            if (!this.messages.containsKey(token)) {
+                this.messages.put(token, msg);
             }
         });
     }
@@ -109,21 +109,19 @@ public class ClientRecord {
      * @param expectedTokensJson
      * @return
      */
-    public ConcurrentHashMap<String, ConcurrentHashMap<Integer, DELIVERY>> toTokenDeliveryMap(
-            JSONObject expectedTokensJson) {
+    public ConcurrentHashMap<String, PriorityQueue<Integer>> toTokenDeliveryMap(JSONObject expectedTokensJson) {
 
         // Data Structure we're building
-        ConcurrentHashMap<String, ConcurrentHashMap<Integer, DELIVERY>> tokenDeliveryMap =
-                new ConcurrentHashMap<String, ConcurrentHashMap<Integer, DELIVERY>>();
+        ConcurrentHashMap<String, PriorityQueue<Integer>> tokenDeliveryMap =
+                new ConcurrentHashMap<String, PriorityQueue<Integer>>();
 
         // De-serialise JSON and insert into the Data Structure
-        expectedTokensJson.forEach((userObj, msgObj) -> {
+        expectedTokensJson.forEach((userObj, tokenListObj) -> {
             String user = userObj.toString();
-            JSONObject tokenInstruction = (JSONObject) msgObj;
-            tokenInstruction.forEach((tokenObj, deliveryInstruction) -> {
+            JSONArray tokenListJson = (JSONArray) tokenListObj;
+            tokenListJson.forEach((tokenObj) -> {
                 Integer token = ((Long) tokenObj).intValue();
-                DELIVERY delivery = (DELIVERY) deliveryInstruction;
-                tokenDeliveryMap.get(user).put(token, delivery);
+                tokenDeliveryMap.get(user).add(token);
             });
         });
         return tokenDeliveryMap;
@@ -133,59 +131,34 @@ public class ClientRecord {
      *
      * A higher token means a more recent message was acknowledged, so we update our client registry with the next token
      *
-     * @param newTokens
+     * @param receivedTokenMap
      */
-    private void updateTokens(ConcurrentHashMap<String, ConcurrentHashMap<Integer, DELIVERY>> newTokens) {
-        newTokens.forEach((user, tokenInstruction) -> {
+    private void updateTokens(ConcurrentHashMap<String, PriorityQueue<Integer>> receivedTokenMap) {
 
-            // Update instructions if we have current instructions
+        receivedTokenMap.forEach((user, tokenList) -> {
+
+            // Update list of tokens, if we have one for the user
             if (this.expected_tokens.containsKey(user)) {
+                PriorityQueue<Integer> currentUserTokens = this.expected_tokens.get(user);
 
-                // Look at each tokenInstruction and update if current is SEND and received SENT
-                tokenInstruction.forEach((token, delivery) -> {
-                    ConcurrentHashMap<Integer, DELIVERY> userDeliveryInstructions = this.expected_tokens.get(user);
-                    DELIVERY updatedDelivery = updateDelivery(delivery, userDeliveryInstructions.get(token));
-                    userDeliveryInstructions.put(token, updatedDelivery);
+                // If neither our list nor our messages have the token, it's a new msg, so add it.
+                tokenList.forEach((token) -> {
+                    if (!currentUserTokens.contains(token) && !this.messages.containsKey(token)) {
+                        currentUserTokens.add(token);
+                    }
+                });
+                // If our list & messages have a token, but it's not in the new list, the msg was sent, delete it
+                currentUserTokens.forEach((token) -> {
+                    if (!tokenList.contains(token) && this.messages.containsKey(token)) {
+                        currentUserTokens.remove(token);
+                    }
                 });
             }
             // If we don't have the user in our ClientRegistry, add it!
             else {
-                this.expected_tokens.put(user, tokenInstruction);
+                this.expected_tokens.put(user, tokenList);
             }
         });
-    }
-
-    /**
-     * Used to update currentDelivery, and indicates when invalid updates are attempted.
-     *
-     * @param currentDelivery
-     * @param receivedDelivery
-     * @return
-     */
-    private DELIVERY updateDelivery(DELIVERY currentDelivery, DELIVERY receivedDelivery) {
-        switch (currentDelivery) {
-            case NO_SEND:
-                if (receivedDelivery != DELIVERY.NO_SEND) {
-                    System.out.println("ERROR! Attempting to update NO_SEND");
-                    System.exit(1);
-                }
-                return DELIVERY.NO_SEND;
-            case SEND:
-                if (receivedDelivery == DELIVERY.SENT) {
-                    return DELIVERY.SENT;
-                }
-                else if (receivedDelivery == DELIVERY.SEND) {
-                    return DELIVERY.SEND;
-                }
-                System.out.println("ERROR! Attempting to update SEND to NO_SEND");
-                System.exit(1);
-            default:
-                if (receivedDelivery == DELIVERY.NO_SEND) {
-                    System.out.println("ERROR! Attempting to update SENT to NO_SEND");
-                    System.exit(1);
-                }
-                return DELIVERY.SENT;
-        }
     }
 
     /**
@@ -210,28 +183,29 @@ public class ClientRecord {
     }
 
     public JSONObject getMessage(Integer token) {
-        if (sent_messages.containsKey(token)) {
-            return sent_messages.get(token);
+        if (messages.containsKey(token)) {
+            return messages.get(token);
         }
         else {
             return null;
         }
     }
 
-    public Integer addSentMessage(JSONObject msg, ArrayList<String> loggedInUsers) {
+    /**
+     * Adds the message to messages and adds the receiving users, all at the same time.
+     * @param msg The message to be recorded in the ClientRecord
+     * @param receivingUsers The users who should be recorded as the intended recipients of this message
+     * @return The token of the message that has been added to the ClientRecord.
+     */
+    public Integer addMessageToRecord(JSONObject msg, ArrayList<String> receivingUsers) {
 
-        // Update next_token_num and sent_messages
+        // Update next_token_num and messages
         Integer new_token = getTokenAndIncrement();
-        this.sent_messages.put(new_token, msg);
+        this.messages.put(new_token, msg);
 
         // Update expected_tokens with new delivery instructions for each user
-        loggedInUsers.forEach((user) -> {
-            this.expected_tokens.get(user).put(new_token, DELIVERY.SEND);
-        });
-        this.expected_tokens.forEach((user, deliveryInstructionsMap) -> {
-            if (!deliveryInstructionsMap.containsKey(new_token)) {
-                deliveryInstructionsMap.put(new_token, DELIVERY.NO_SEND);
-            }
+        receivingUsers.forEach((user) -> {
+            this.expected_tokens.get(user).add(new_token);
         });
         return new_token;
     }
@@ -257,12 +231,20 @@ public class ClientRecord {
         return this.secret;
     }
 
+    /**
+     *
+     * @param newLoggedIn
+     */
     public void updateLoggedIn(Integer newLoggedIn) {
         if (newLoggedIn > this.logged_in || this.logged_in == Integer.MAX_VALUE) {
             this.logged_in = newLoggedIn;
         }
     }
 
+    /**
+     *
+     * @param now_loggedIn
+     */
     public void setLoggedIn(boolean now_loggedIn) {
         boolean currentlyLoggedIn = loggedIn();
         if (now_loggedIn && !currentlyLoggedIn) {
@@ -277,6 +259,9 @@ public class ClientRecord {
         }
     }
 
+    /**
+     *
+     */
     public void incrementLoggedIn() {
         if (this.logged_in == Integer.MAX_VALUE) {
             this.logged_in = 2;
@@ -286,9 +271,57 @@ public class ClientRecord {
         }
     }
 
+    /**
+     *
+     * @return
+     */
     public boolean loggedIn() {
         return this.logged_in % 2 == 0;
     }
 
+    /**
+     * Returns all users that are to receive the message indicated by the token, and who have already received all other
+     * messages they are due to receive, preceding this message.
+     *
+     * Checks if:
+     *  - Prior messages have been sent
+     *  -
+     *
+     * @param token Indicates the message being sent
+     * @return The users that are due to be delivered the message with the provided token.
+     */
+    public ArrayList<String> getReceivingUsers(Integer token) {
+        ArrayList<String> receivingUsers = new ArrayList<String>();
+        this.expected_tokens.forEach((user, deliveryList) -> {
+
+            // If the first token in the list is the token, then
+            if (deliveryList.peek().equals(token) && this.expected_tokens.containsKey(token)) {
+                receivingUsers.add(user);
+            }
+        });
+        return receivingUsers;
+    }
+
+
+    /**
+     * Update the record with all of the users who have been sent the message indicated by token by deleting their
+     * tokens from their expected_tokens list.
+     *
+     * @param receivedUsers A list of the users whom received the message indicated by token.
+     * @param token Indicates a message in the message
+     */
+    public void updateSentMessages(ArrayList<String> receivedUsers, Integer token) {
+        receivedUsers.forEach((user) -> {
+            if (this.expected_tokens.containsKey(user) && this.messages.containsKey(token)) {
+                this.expected_tokens.get(user).remove(token);
+            }
+            else {
+                System.out.println("ERROR: Trying to update sent messages for a user not included in expected_tokens");
+                System.out.println("User: " + user + ", token: " + token);
+                System.out.println("messages: " + this.messages);
+                System.exit(1);
+            }
+        });
+    }
 
 }

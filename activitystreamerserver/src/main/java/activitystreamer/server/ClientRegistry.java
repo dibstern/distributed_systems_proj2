@@ -1,6 +1,5 @@
 package activitystreamer.server;
 
-import com.google.gson.Gson;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import java.util.ArrayList;
@@ -95,23 +94,6 @@ public class ClientRegistry {
         return record.sameSecret(secret);
     }
 
-    /**
-     *
-     *
-     *
-     * @param username
-     * @param token
-     * @return Null if client or message not in registry. Otherwise returns the JSONObject message.
-     */
-    public JSONObject getMessage(String username, Integer token) {
-        if (clientRecords.containsKey(username)) {
-            ClientRecord record = clientRecords.get(username);
-            return record.getMessage(token);
-        }
-        else {
-            return null;
-        }
-    }
 
     public boolean userExists(String user) {
         return clientRecords.containsKey(user);
@@ -128,9 +110,9 @@ public class ClientRegistry {
      * @param msg The authenticated activity message.
      * @return Integer representing the token assigned to the newly received message
      */
-    public Integer registerSentMessage(String user, JSONObject msg, ArrayList<String> loggedInUsers) {
+    public Integer addMessageToRegistry(String user, JSONObject msg, ArrayList<String> receivingUsers) {
         ClientRecord record = clientRecords.get(user);
-        return record.addSentMessage(msg, loggedInUsers);
+        return record.addMessageToRecord(msg, receivingUsers);
     }
 
     /**
@@ -147,5 +129,58 @@ public class ClientRegistry {
             }
         });
         return loggedInUsers;
+    }
+
+    /**
+     * Retrieves the message indicated by the token, sent from the indicated username
+     *
+     * @param username Indicates the ClientRecord to retrieve
+     * @param token Indicates the message sent by the user, in the record,
+     * @return The JSONObject message. Prints an error message & quits if the client is not in the client records.
+     *         (and returns null).
+     */
+    public JSONObject getMessage(String username, Integer token) {
+        if (clientRecords.containsKey(username)) {
+            ClientRecord record = clientRecords.get(username);
+            return record.getMessage(token);
+        }
+        else {
+            System.out.println("getMessage (ClientRegistry) ERROR: Message does not exist!");
+            System.out.println("username: " + username + "not in ClientRecords: " + clientRecords);
+            System.exit(1);
+            return null;
+        }
+    }
+
+    /**
+     * Retrieves a list of all users who should receive a particular message
+     *
+     * @param sender The sender of the message indicated by token
+     * @param token The number that indicates the message from sender to be sent
+     * @return An ArrayList of the usernames of those clients who should receive the message from the sender indicated
+     *         by token, at this time. Empty ArrayList if no clients should receive the message.
+     *         Prints an error message & quits if the client is not in the client records (and returns null).
+     */
+    public ArrayList<String> getReceivingUsers(String sender, Integer token) {
+        if (clientRecords.containsKey(sender)) {
+            return this.clientRecords.get(sender).getReceivingUsers(token);
+        }
+        else {
+            System.out.println("getReceivingUsers (ClientRegistry) ERROR: Message does not exist!");
+            System.out.println("sender: " + sender + "not in ClientRecords: " + clientRecords);
+            System.exit(1);
+            return null;
+        }
+    }
+
+    /**
+     *
+     * @param sender
+     * @param token
+     * @param receivedUsers
+     */
+    public void updateSentMessages(String sender, Integer token, ArrayList<String> receivedUsers) {
+        ClientRecord senderRecord = this.clientRecords.get(sender);
+        senderRecord.updateSentMessages(receivedUsers, token);
     }
 }
