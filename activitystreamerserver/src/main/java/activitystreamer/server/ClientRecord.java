@@ -242,11 +242,9 @@ public class ClientRecord {
      */
     public Integer getTokenAndIncrement() {
         this.next_token_num += 1;
-        return this.next_token_num - 1;
+        int token_given = this.next_token_num - 1;
+        return token_given;
     }
-
-
-
 
     /*
      * Getters and Setters
