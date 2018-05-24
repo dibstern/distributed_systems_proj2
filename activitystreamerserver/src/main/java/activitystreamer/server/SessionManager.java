@@ -204,19 +204,23 @@ public class SessionManager extends Thread {
     }
 
     /**
-     * Lookups the connection for a particular client, given its username
-     * @param username The username of the client we are searching for
-     * @return The connection for that given username
+     * Retrieves the connection for a particular client, given its username
+     * @param username The username of the client for which we are searching.
+     * @param secret The secret of the client for which we are searching
+     * @return The connection for that given username. Null if the connection is not in our connections.
      */
-    private Connection getConnectionForClient(String username, String secret) {
+    public Connection getConnectionForClient(String username, String secret) {
         for (Connection con : clientConnections.keySet()) {
-            ConnectedClient curr = clientConnections.get(con);
-            if (curr.getUsername().equals(username) && curr.getSecret().equals(secret)) {
+            ConnectedClient client = clientConnections.get(con);
+            if (client.isClient(username, secret)) {
                 return con;
             }
         }
         return null;
     }
+
+
+
 
 
 
@@ -356,7 +360,7 @@ public class SessionManager extends Thread {
         // If the username & secret combination matches the known combination
         if (clientRegistry.secretCorrect(username, password)) {
 
-            // Is the connected client registering with this server?
+            // Is the connected client still registering with this server?
             if (clientConnections.containsKey(c)) {
                 ConnectedClient client = clientConnections.get(c);
 
@@ -383,12 +387,13 @@ public class SessionManager extends Thread {
         }
         // Send login success message (Registered & Correct combo) & check for redirection
         if (logged_in) {
+            clientRegistry.logInUser(username);
             String msg = MessageProcessor.getLoginSuccessMsg(username);
             log.error("about to call login success message\n");
             c.writeMsg(msg);
 
             // Check if client should be redirected to another server
-            checkRedirectClient(c);
+            checkRedirectClient(c, username);
         }
         // username & secret either not stored locally or client registration is incomplete. Send login failed message.
         else {
@@ -408,22 +413,22 @@ public class SessionManager extends Thread {
         c.writeMsg(msg);
 
         // Check if there is another server client should connect to, and send getRedirectMsg message if so
-        checkRedirectClient(c);
+        checkRedirectClient(c, username);
     }
 
     /** Checks if the server knows of another server that has at least two less connections than it. If such a server
      * exists, sends a REDIRECT message with that server's hostname and port number.
      * This has been implemented to return the FIRST server that has two or less connections.
      * @param c The connection to send the message onn**/
-    public void checkRedirectClient(Connection c) {
+    public void checkRedirectClient(Connection c, String username) {
 
         int load = clientConnections.size();
         for (ConnectedServer server : serverInfo.values()) {
             if (server.getLoad() <= load - 2) {
                 String msg = MessageProcessor.getRedirectMsg(server.getHostname(), server.getPort());
-                log.error("about to call redirect message\n");
+                log.info("about to call redirect message\n");
                 c.writeMsg(msg);
-                clientConnections.remove(c);
+                closeConnection(c);
                 break;
             }
         }
@@ -570,6 +575,16 @@ public class SessionManager extends Thread {
     }
 
 
+//    public HashMap<String, HashMap<Integer, ArrayList<String>>> messageFlush() {
+//        HashMap<Integer, ArrayList<String>> sentMessages = new HashMap<Integer, ArrayList<String>>();
+//
+//
+//
+//        return sentMessages;
+//    }
+
+
+
 
 
 
@@ -590,13 +605,22 @@ public class SessionManager extends Thread {
      * Removes the connection from the appropriate data structure, depending on who the connection is with.
      * @param con The connection to be closed
      */
-    public synchronized void deleteClosedConnection(Connection con) {
+    private synchronized void deleteClosedConnection(Connection con) {
 
         if (serverConnections.contains(con)) {
             // Close connection to another server
             serverConnections.remove(con);
         }
         else if (clientConnections.containsKey(con)) {
+            ConnectedClient client = clientConnections.get(con);
+            String username = client.getUsername();
+
+            // TODO: Test this
+            if (!username.equals("anonymous")){
+                clientRegistry.logOutUser(username);
+            }
+
+
             // Close connection to another client
             clientConnections.remove(con);
         }
@@ -620,7 +644,46 @@ public class SessionManager extends Thread {
         term = t;
     }
 
+    //
+    // Getters and Setters
+    //
+
+    /**
+     * Getter that retrieves the ClientRegistry
+     * @return the clientRegistry of this SessionManager
+     */
     public ClientRegistry getClientRegistry() {
         return this.clientRegistry;
     }
+
+
+
+
+    /**
+     * Getter for clientConnections, given a HashMap of
+     * @param receivingUsers A HashMap of Usernames and Secrets
+     * @return The clientConnections HashMap that contains the connections and information about the associated clients.
+     */
+    public static HashMap<String, Connection> getClientConnections(HashMap<String, String> receivingUsers) {
+        HashMap<String, Connection> connectedClients = new HashMap<String, Connection>();
+        clientConnections.forEach((con, client) -> {
+            String conUsername = client.getUsername();
+            String conSecret = client.getSecret();
+            if (receivingUsers.containsKey(conUsername) & receivingUsers.get(conUsername).equals(conSecret)) {
+                connectedClients.put(conUsername, con);
+            }
+        });
+        return connectedClients;
+    }
+
+
+
+//    public HashMap<Integer, ArrayList<String>> messageFlush(String sender, Integer token) {
+//        HashMap<Integer, ArrayList<String>> sentMessages = new HashMap<Integer, ArrayList<String>>();
+//        // clientRegistry.
+//
+//
+//        return sentMessages;
+//    }
+
 }

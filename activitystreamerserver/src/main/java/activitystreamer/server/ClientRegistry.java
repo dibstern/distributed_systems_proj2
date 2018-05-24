@@ -3,6 +3,7 @@ package activitystreamer.server;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ClientRegistry {
@@ -34,6 +35,8 @@ public class ClientRegistry {
 
         // Iterate through Array
         registry.forEach((clientRecordObject) -> {
+
+            // TODO: UPDATE THIS (ALL BELOW)
 
             // Convert each record into a JSONObject
             JSONObject clientRecordJson = (JSONObject) clientRecordObject;
@@ -94,6 +97,18 @@ public class ClientRegistry {
         return record.sameSecret(secret);
     }
 
+    public void logInUser(String user) {
+        // TODO: Login Broadcast
+        clientRecords.get(user).setLoggedIn(true);
+    }
+
+    public void logOutUser(String user) {
+        // TODO: Logout Broadcast
+        clientRecords.get(user).setLoggedIn(false);
+    }
+
+
+
 
     public boolean userExists(String user) {
         return clientRecords.containsKey(user);
@@ -103,17 +118,6 @@ public class ClientRegistry {
         clientRecords.remove(username);
     }
 
-
-    /**
-     * Add message and its expected recipients to ClientRegistry and retrieve the allocated token
-     * @param user The user sending the activity message.
-     * @param msg The authenticated activity message.
-     * @return Integer representing the token assigned to the newly received message
-     */
-    public Integer addMessageToRegistry(String user, JSONObject msg, ArrayList<String> receivingUsers) {
-        ClientRecord record = clientRecords.get(user);
-        return record.addMessageToRecord(msg, receivingUsers);
-    }
 
     /**
      * Retrieve a list of all of the ClientRecords that are "logged in"
@@ -131,56 +135,114 @@ public class ClientRegistry {
         return loggedInUsers;
     }
 
-    /**
-     * Retrieves the message indicated by the token, sent from the indicated username
-     *
-     * @param username Indicates the ClientRecord to retrieve
-     * @param token Indicates the message sent by the user, in the record,
-     * @return The JSONObject message. Prints an error message & quits if the client is not in the client records.
-     *         (and returns null).
-     */
-    public JSONObject getMessage(String username, Integer token) {
-        if (clientRecords.containsKey(username)) {
-            ClientRecord record = clientRecords.get(username);
-            return record.getMessage(token);
-        }
-        else {
-            System.out.println("getMessage (ClientRegistry) ERROR: Message does not exist!");
-            System.out.println("username: " + username + "not in ClientRecords: " + clientRecords);
-            System.exit(1);
-            return null;
-        }
-    }
 
     /**
-     * Retrieves a list of all users who should receive a particular message
-     *
-     * @param sender The sender of the message indicated by token
-     * @param token The number that indicates the message from sender to be sent
-     * @return An ArrayList of the usernames of those clients who should receive the message from the sender indicated
-     *         by token, at this time. Empty ArrayList if no clients should receive the message.
-     *         Prints an error message & quits if the client is not in the client records (and returns null).
+     * Retrieves a map of usernames and passwords, for comparison, for all usernames provided
+     * @param userList The list of usernames for which we are returning the credentials.
+     * @return A mapping from clients' usernames to their secret.
      */
-    public ArrayList<String> getReceivingUsers(String sender, Integer token) {
+    public HashMap<String, String> getClientCredentials(ArrayList<String> userList) {
+        HashMap<String, String> clientCredentials = new HashMap<String, String>();
+
+        userList.forEach((user) -> {
+            if (clientRecords.containsKey(user)) {
+                String secret = clientRecords.get(user).getSecret();
+                clientCredentials.put(user, secret);
+            }
+        });
+        return clientCredentials;
+    }
+
+    public Integer addMessageToRegistry(String sender, JSONObject activityMsg, ArrayList<String> loggedInUsers) {
+        Integer token = -1;
         if (clientRecords.containsKey(sender)) {
-            return this.clientRecords.get(sender).getReceivingUsers(token);
+            token = clientRecords.get(sender).addMessage(activityMsg, loggedInUsers);
+        }
+        if (token != -1) {
+            return token;
         }
         else {
-            System.out.println("getReceivingUsers (ClientRegistry) ERROR: Message does not exist!");
-            System.out.println("sender: " + sender + "not in ClientRecords: " + clientRecords);
+            System.out.println("ERROR - addMessageToRegistry - " + sender + " not in clientRecords: " + clientRecords);
             System.exit(1);
-            return null;
+            return token;
         }
     }
 
-    /**
-     *
-     * @param sender
-     * @param token
-     * @param receivedUsers
-     */
-    public void updateSentMessages(String sender, Integer token, ArrayList<String> receivedUsers) {
-        ClientRecord senderRecord = this.clientRecords.get(sender);
-        senderRecord.updateSentMessages(receivedUsers, token);
+    public Message getMessage(String sender, Integer token) {
+        if (clientRecords.containsKey(sender)) {
+            return clientRecords.get(sender).getMessage(token);
+        }
+        else {
+            System.out.println("ERROR - getMessage - " + sender + " not in clientRecords: " + clientRecords);
+            System.exit(1);
+        }
+        return null;
     }
+
+    public void receivedMessage(String sender, ArrayList<String> receivers, Integer token) {
+        if (clientRecords.containsKey(sender)) {
+            clientRecords.get(sender).receivedMessage(receivers, token);
+        }
+        else {
+            System.out.println("ERROR - receivedMessage - " + sender + " not in clientRecords: " + clientRecords);
+            System.exit(1);
+        }
+    }
+
+
+    public JSONObject messageFlush(HashMap<String, Connection> clientConnections, String sender) {
+
+        // Prepare to send ACK message
+        JSONObject ackMessage = new JSONObject();
+        JSONObject theMessages = new JSONObject();
+        ackMessage.put("command", "MSG_ACKS");
+        ackMessage.put("sender", sender);
+        HashMap<Integer, ArrayList<String>> acks = new HashMap<Integer, ArrayList<String>>();
+
+        if (!clientRecords.containsKey(sender)) {
+            System.out.println("ERROR: - messageFlush in clientRegistry - sender: " + sender +
+                               " not in clientRecords" + clientRecords);
+            System.exit(1);
+            ackMessage.put("status", "failure");
+            return ackMessage;
+        }
+        else {
+            ClientRecord senderRecord = clientRecords.get(sender);
+
+            clientConnections.forEach((user, con) -> {
+                Message m;
+                // Send all possible messages to client
+                do {
+                    m = senderRecord.getNextMessage(user);
+                    if (m != null) {
+
+                        // Send the message
+                        JSONObject activityBroadcastMsg = m.getClientMessage();
+                        Integer token = m.getToken();
+                        con.writeMsg(activityBroadcastMsg.toString());
+
+                        // Add an ACK
+                        if (acks.containsKey(token)) {
+                            ArrayList<String> users = new ArrayList<String>();
+                            users.add(user);
+                            acks.put(token, users);
+                        } else {
+                            acks.get(token).add(user);
+                        }
+                    }
+                } while (m != null);
+            });
+
+            // Report the messages as having been sent
+            acks.forEach((token, recipients) -> {
+                senderRecord.receivedMessage(recipients, token);
+                theMessages.put(token, recipients);
+            });
+
+            // Return the ACKs, to send to servers!
+            ackMessage.put("messages", theMessages);
+            return ackMessage;
+        }
+    }
+
 }

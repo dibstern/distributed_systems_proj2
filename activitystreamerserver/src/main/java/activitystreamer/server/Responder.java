@@ -62,8 +62,8 @@ public class Responder {
             responses.put("LOGOUT", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
-                    // TODO: Register Logout status with ClientRegistry
-                    SessionManager.getInstance().deleteClosedConnection(con);
+                    SessionManager sessionManager = SessionManager.getInstance();
+                    sessionManager.closeConnection(con);
                 }
             });
             /* An activity message has been received from a client, and already checked to ensure it is valid, the client
@@ -80,32 +80,33 @@ public class Responder {
                     activityMessage.put("authenticated_user", user);
 
                     SessionManager sessionManager = SessionManager.getInstance();
+                    ClientRegistry clientRegistry = sessionManager.getClientRegistry();
 
                     // Retrieve the logged in users (known to the clientRegistry at this time)
-                    ArrayList<String> loggedInUsers = sessionManager.getClientRegistry().getLoggedInUsers();
+                    ArrayList<String> loggedInUsers = clientRegistry.getLoggedInUsers();
 
                     // Add message and its expected recipients to ClientRegistry and retrieve the allocated token
-                    Integer msgToken = sessionManager.getClientRegistry().registerSentMessage(user, activityMessage,
-                                                                                              loggedInUsers);
+                    Integer msgToken = clientRegistry.addMessageToRegistry(user, activityMessage, loggedInUsers);
+
                     // Add message token & recipients to ACTIVITY_BROADCAST message
                     String activityBroadcastMsg = MessageProcessor.getActivityBroadcastMsg(activityMessage,
                                                                                            loggedInUsers, msgToken);
+                    // Send ACTIVITY_BROADCAST to other servers
+                    sessionManager.serverBroadcast(activityBroadcastMsg);
 
-                    // Broadcast to all connections that aren't the sender
-                    // TODO: Send Message to Clients and update ClientRegistry, and send ACKs.
-                    // TODO: Send Message to other Servers
-                    // TODO: REPORT - Cannot avoid problems if server crashes before sending out message
-                    // TODO: Make sure we send the messages only if the token matches
-                    // TODO: Make sure we send proceeding messages if they exist in the ClientRegistry and the user
-                    // TODO:       is supposed to receive them (based on DELIVERY)
-                    // TODO: Update the ClientRegistry with the ACK(s?)
-                    // TODO: Bundle all client ACKs
-                    sessionManager.broadcastMessage(con, activityBroadcastMsg);
+                    // Retrieve client connections matching the usernames & passwords of loggedInUsers
+                    HashMap<String, Connection> receiverConnections =
+                            sessionManager.getClientConnections(clientRegistry.getClientCredentials(loggedInUsers));
+
+                    // Send all msgs possible from this sender (all queued msgs first) to connected clients
+                    JSONObject ackMessage = clientRegistry.messageFlush(receiverConnections, user);
+
+                    // Send the ACKs to all servers!
+                    sessionManager.serverBroadcast(ackMessage.toString());
 
                     // Send back an ACTIVITY_MESSAGE to the sender, so it can display it on its GUI
                     String processedActivityMsg = MessageProcessor.getActivityMessage(activityMessage);
                     con.writeMsg(processedActivityMsg);
-
                 }
             });
             /* Register message received by server from a client. Client wants to register username and password with
@@ -138,7 +139,7 @@ public class Responder {
             responses.put("INVALID_MESSAGE", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
-                    SessionManager.getInstance().deleteClosedConnection(con);
+                    SessionManager.getInstance().closeConnection(con);
                 }
             });
 
@@ -179,6 +180,20 @@ public class Responder {
 
                 }
             });
+            /* Logout message received from client by server.
+             * Do not need to perform any additional checks as command checked upon calling function,
+             * and no other fields are required.
+             * Tells server to close connection. **/
+            responses.put("MSG_ACKS", new ServerCommand() {
+                @Override
+                public void execute(JSONObject json, Connection con) {
+                    // TODO: Parse & Update Messages in ClientRegistry
+
+
+                }
+            });
+
+
             /* Server announce message received from another server. Update information about this server, then forward
              * message on to all server connections. **/
             responses.put("SERVER_ANNOUNCE", new ServerCommand() {

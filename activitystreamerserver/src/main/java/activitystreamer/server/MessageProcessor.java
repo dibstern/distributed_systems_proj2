@@ -408,7 +408,7 @@ public class MessageProcessor {
         msg.put("command", "ACTIVITY_BROADCAST");
         msg.put("activity", json);
         msg.put("token", msgToken);
-        JSONObject recipientsJson = toJson(MessageProcessor.getGson().toJson(loggedInUsers), true, "recipients");
+        JSONObject recipientsJson = toJson(getGson().toJson(loggedInUsers), true, "recipients");
         msg.putAll(recipientsJson);
         return msg.toString();
     }

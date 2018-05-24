@@ -1,55 +1,45 @@
 package activitystreamer.server;
 
-import org.json.simple.JSONArray;
+import com.google.gson.reflect.TypeToken;
 import org.json.simple.JSONObject;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.PriorityQueue;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashMap;
+import java.util.Collections;
 
 public class ClientRecord {
 
     private String username;
     private String secret;
-    private Integer next_token_num;
+    private ArrayList<Message> messages;
     private Integer logged_in;
-
-    // Maps usernames to the next expected message token (the token of the next message that the user has not received)
-    private ConcurrentHashMap<String, PriorityQueue<Integer>> expected_tokens;
-
-    // Maps tokens to JSONObject messages
-    private ConcurrentHashMap<Integer, JSONObject> messages;
-
+    private Integer next_token;
+    private Integer last_message_cleared;
 
     public ClientRecord(String username, String secret) {
         this.username = username;
         this.secret = secret;
-        this.next_token_num = 1;
         this.logged_in = 1;
-        this.expected_tokens = new ConcurrentHashMap<String, PriorityQueue<Integer>>();
-        this.messages = new ConcurrentHashMap<Integer, JSONObject>();
+        this.next_token = 1;
+        this.last_message_cleared = 0;
+        this.messages = new ArrayList<Message>();
     }
 
     public ClientRecord(JSONObject clientRecordJson) {
         this.username = clientRecordJson.get("username").toString();
         this.secret = clientRecordJson.get("secret").toString();
-        this.next_token_num = ((Long) clientRecordJson.get("next_token_num")).intValue();
         this.logged_in = ((Long) clientRecordJson.get("logged_in")).intValue();
-        this.expected_tokens = toTokenDeliveryMap((JSONObject) clientRecordJson.get("expected_tokens"));
-        this.messages = toSentMessagesHashMap((JSONObject) clientRecordJson.get("messages"));
+        this.next_token = ((Long) clientRecordJson.get("next_token")).intValue();
+        this.last_message_cleared = ((Long) clientRecordJson.get("last_message_cleared")).intValue();
+
+        // TODO: Check that this works!!
+        Type collectionType = new TypeToken<ArrayList<Message>>(){}.getType();
+        this.messages = MessageProcessor.getGson().fromJson(
+                ((JSONObject) clientRecordJson.get("messages")).toJSONString(),
+                collectionType);
     }
 
-    /**
-     *
-     * @param receivedMessagesRecord
-     */
-    public void updateMessages(ConcurrentHashMap<Integer, JSONObject> receivedMessagesRecord) {
-        receivedMessagesRecord.forEach((token, jsonMsg) -> {
-            if (!this.messages.containsKey(token)) {
-                this.messages.put(token, jsonMsg);
-            }
-        });
-    }
 
     /**
      *
@@ -57,109 +47,24 @@ public class ClientRecord {
      */
     public void updateRecord(JSONObject registryObject) {
 
-        // Update token num
-        Integer token = ((Long) registryObject.get("next_token_num")).intValue();
-        if (token > this.next_token_num) {
-            this.next_token_num = token;
-        }
-
         // Update Logged In Status
         updateLoggedIn(((Long) registryObject.get("logged_in")).intValue());
 
-        // Update Tokens
-        JSONObject expectedTokensJson = (JSONObject) registryObject.get("expected_tokens");
-        ConcurrentHashMap<String, PriorityQueue<Integer>> receivedTokenMap = toTokenDeliveryMap(expectedTokensJson);
-        updateTokens(receivedTokenMap);
-
-        // Update sent messages (MUST be updated after tokens)
-        JSONObject sentMessagesJson = (JSONObject) registryObject.get("messages");
-        ConcurrentHashMap<Integer, JSONObject> newSentMessages = toSentMessagesHashMap(sentMessagesJson);
-        updateSentMessages(newSentMessages);
+        updateLastMessageCleared(((Long) registryObject.get("last_message_cleared")).intValue());
+        // Update Messages
+//        JSONObject expectedTokensJson = (JSONObject) registryObject.get("expected_tokens");
+//        ConcurrentHashMap<String, ArrayList<Integer>> receivedTokenMap = toTokenDeliveryMap(expectedTokensJson);
+//        updateTokens(receivedTokenMap);
     }
 
-    /**
-     *
-     * @param sentMessagesJson
-     * @return
-     */
-    public ConcurrentHashMap<Integer, JSONObject> toSentMessagesHashMap(JSONObject sentMessagesJson) {
-        ConcurrentHashMap<Integer, JSONObject> sentMessagesHashMap = new ConcurrentHashMap<Integer, JSONObject>();
-        sentMessagesJson.forEach((tokenObj, msgObj) -> {
-            Integer token = ((Long) tokenObj).intValue();
-            JSONObject msg = (JSONObject) msgObj;
-            sentMessagesHashMap.put(token, msg);
-        });
-        return sentMessagesHashMap;
+    private void updateLastMessageCleared(Integer lastMessageCleared) {
+        if (this.last_message_cleared < lastMessageCleared) {
+            this.last_message_cleared = lastMessageCleared;
+        }
+        // TODO: Delete the associated cleared message, if it exists?
+        // Would be simply: deleteMessage(lastMessageCleared);
     }
 
-    /**
-     *
-     * @param sentMessages
-     */
-    private void updateSentMessages(ConcurrentHashMap<Integer, JSONObject> sentMessages) {
-        sentMessages.forEach((token, msg) -> {
-            if (!this.messages.containsKey(token)) {
-                this.messages.put(token, msg);
-            }
-        });
-    }
-
-    /**
-     *
-     * @param expectedTokensJson
-     * @return
-     */
-    public ConcurrentHashMap<String, PriorityQueue<Integer>> toTokenDeliveryMap(JSONObject expectedTokensJson) {
-
-        // Data Structure we're building
-        ConcurrentHashMap<String, PriorityQueue<Integer>> tokenDeliveryMap =
-                new ConcurrentHashMap<String, PriorityQueue<Integer>>();
-
-        // De-serialise JSON and insert into the Data Structure
-        expectedTokensJson.forEach((userObj, tokenListObj) -> {
-            String user = userObj.toString();
-            JSONArray tokenListJson = (JSONArray) tokenListObj;
-            tokenListJson.forEach((tokenObj) -> {
-                Integer token = ((Long) tokenObj).intValue();
-                tokenDeliveryMap.get(user).add(token);
-            });
-        });
-        return tokenDeliveryMap;
-    }
-
-    /**
-     *
-     * A higher token means a more recent message was acknowledged, so we update our client registry with the next token
-     *
-     * @param receivedTokenMap
-     */
-    private void updateTokens(ConcurrentHashMap<String, PriorityQueue<Integer>> receivedTokenMap) {
-
-        receivedTokenMap.forEach((user, tokenList) -> {
-
-            // Update list of tokens, if we have one for the user
-            if (this.expected_tokens.containsKey(user)) {
-                PriorityQueue<Integer> currentUserTokens = this.expected_tokens.get(user);
-
-                // If neither our list nor our messages have the token, it's a new msg, so add it.
-                tokenList.forEach((token) -> {
-                    if (!currentUserTokens.contains(token) && !this.messages.containsKey(token)) {
-                        currentUserTokens.add(token);
-                    }
-                });
-                // If our list & messages have a token, but it's not in the new list, the msg was sent, delete it
-                currentUserTokens.forEach((token) -> {
-                    if (!tokenList.contains(token) && this.messages.containsKey(token)) {
-                        currentUserTokens.remove(token);
-                    }
-                });
-            }
-            // If we don't have the user in our ClientRegistry, add it!
-            else {
-                this.expected_tokens.put(user, tokenList);
-            }
-        });
-    }
 
     /**
      * Checks whether or not the JSONObject representing a client record has the same secret as this ClientRecord
@@ -182,43 +87,7 @@ public class ClientRecord {
         return this.secret.equals(secret);
     }
 
-    public JSONObject getMessage(Integer token) {
-        if (messages.containsKey(token)) {
-            return messages.get(token);
-        }
-        else {
-            return null;
-        }
-    }
 
-    /**
-     * Adds the message to messages and adds the receiving users, all at the same time.
-     * @param msg The message to be recorded in the ClientRecord
-     * @param receivingUsers The users who should be recorded as the intended recipients of this message
-     * @return The token of the message that has been added to the ClientRecord.
-     */
-    public Integer addMessageToRecord(JSONObject msg, ArrayList<String> receivingUsers) {
-
-        // Update next_token_num and messages
-        Integer new_token = getTokenAndIncrement();
-        this.messages.put(new_token, msg);
-
-        // Update expected_tokens with new delivery instructions for each user
-        receivingUsers.forEach((user) -> {
-            this.expected_tokens.get(user).add(new_token);
-        });
-        return new_token;
-    }
-
-    /**
-     * Increment the current token and return the previous token. The previous token is the one assigned to a new msg.
-     * @return Integer representing the token being assigned to a new message.
-     */
-    public Integer getTokenAndIncrement() {
-        this.next_token_num += 1;
-        int token_given = this.next_token_num - 1;
-        return token_given;
-    }
 
     /*
      * Getters and Setters
@@ -279,49 +148,109 @@ public class ClientRecord {
         return this.logged_in % 2 == 0;
     }
 
-    /**
-     * Returns all users that are to receive the message indicated by the token, and who have already received all other
-     * messages they are due to receive, preceding this message.
-     *
-     * Checks if:
-     *  - Prior messages have been sent
-     *  -
-     *
-     * @param token Indicates the message being sent
-     * @return The users that are due to be delivered the message with the provided token.
-     */
-    public ArrayList<String> getReceivingUsers(Integer token) {
-        ArrayList<String> receivingUsers = new ArrayList<String>();
-        this.expected_tokens.forEach((user, deliveryList) -> {
 
-            // If the first token in the list is the token, then
-            if (deliveryList.peek().equals(token) && this.expected_tokens.containsKey(token)) {
-                receivingUsers.add(user);
-            }
-        });
-        return receivingUsers;
+    public Integer getNextTokenAndIncrement() {
+        this.next_token += 1;
+        int token = this.next_token - 1;
+        return token;
     }
 
 
-    /**
-     * Update the record with all of the users who have been sent the message indicated by token by deleting their
-     * tokens from their expected_tokens list.
-     *
-     * @param receivedUsers A list of the users whom received the message indicated by token.
-     * @param token Indicates a message in the message
-     */
-    public void updateSentMessages(ArrayList<String> receivedUsers, Integer token) {
-        receivedUsers.forEach((user) -> {
-            if (this.expected_tokens.containsKey(user) && this.messages.containsKey(token)) {
-                this.expected_tokens.get(user).remove(token);
+    public Integer addMessage(JSONObject msg, ArrayList<String> recipients) {
+        Integer token = getNextTokenAndIncrement();
+        messages.add(new Message(token, msg, recipients));
+        Collections.sort(messages);
+        return token;
+    }
+
+    public Message getMessage(Integer token) {
+        for (Message message : messages ) {
+            if (message.getToken().equals(token)) {
+                return message;
             }
-            else {
-                System.out.println("ERROR: Trying to update sent messages for a user not included in expected_tokens");
-                System.out.println("User: " + user + ", token: " + token);
-                System.out.println("messages: " + this.messages);
-                System.exit(1);
+        }
+        return null;
+    }
+
+    public void receivedMessage(ArrayList<String> receivers, Integer token) {
+        boolean allDelivered = false;
+        for (Message message : messages) {
+            if (message.getToken().equals(token)) {
+                allDelivered = message.receivedMessages(receivers);
+            }
+        }
+        if (allDelivered) {
+            deleteMessage(token);
+        }
+    }
+
+    public boolean containsMessage(Integer token) {
+        for (Message m : messages) {
+            if (m.getToken().equals(token)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void deleteMessage(Integer token) {
+        messages.removeIf(m -> m.getToken().equals(token));
+        if (this.last_message_cleared < token) {
+            this.last_message_cleared = token;
+        }
+    }
+
+    /**
+     * Returns a HashMap of <Username, Message> Pairs, the message to send to each user.
+     * @param connectedClients A client currently connected to the server.
+     * @return a HashMap of <Username, Message> Pairs, so each user has a message (if any) the server can send it.
+     *         May return an empty HashMap if no messages are yet ready to send.
+     */
+    public HashMap<String, Message> getNextMessages(ArrayList<String> connectedClients) {
+        HashMap<String, Message> nextMessages = new HashMap<String, Message>();
+
+        // Get the next message for each user, and if it's not null, store it!
+        connectedClients.forEach((user) -> {
+            Message msg = getNextMessage(user);
+            if (msg != null) {
+                nextMessages.put(user, msg);
             }
         });
+        return nextMessages;
+    }
+
+    /**
+     * Used to get the next valid message available for the recipient.
+     * @param recipient
+     * @return
+     */
+    public Message getNextMessage(String recipient) {
+
+        // Make sure the first message we iterate over is the first addressed to the recipient
+        Collections.sort(messages);
+        for (Message m : messages) {
+            if (m.addressedTo(recipient)) {
+                if (okayToSend(m.getToken())) {
+                    return m;
+                }
+                else {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    // public HashMap<Integer, ArrayList<String>> sen
+
+    private Integer getLastTokenCleared() {
+        return this.last_message_cleared;
+    }
+
+
+    public boolean okayToSend(Integer token) {
+        Integer lastCleared = getLastTokenCleared();
+        return (lastCleared.equals(token-1) || lastCleared > token || containsMessage(token-1) || token == 1);
     }
 
 }
