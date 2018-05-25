@@ -196,6 +196,8 @@ public class ClientRegistry {
 
     public JSONObject messageFlush(HashMap<String, Connection> clientConnections, String sender) {
 
+        boolean noMessagesSent = true;
+
         // Prepare to send ACK message
         JSONObject ackMessage = new JSONObject();
         JSONObject theMessages = new JSONObject();
@@ -230,12 +232,18 @@ public class ClientRegistry {
                             ArrayList<String> users = new ArrayList<String>();
                             users.add(user);
                             acks.put(token, users);
-                        } else {
+                        }
+                        else {
                             acks.get(token).add(user);
                         }
                     }
                 } while (m != null);
             });
+
+            // Return null if no messages sent
+            if (!acks.isEmpty()) {
+                noMessagesSent = false;
+            }
 
             // Report the messages as having been sent
             acks.forEach((token, recipients) -> {
@@ -245,6 +253,10 @@ public class ClientRegistry {
 
             // Return the ACKs, to send to servers!
             ackMessage.put("messages", theMessages);
+
+            if (noMessagesSent) {
+                return null;
+            }
             return ackMessage;
         }
     }

@@ -102,7 +102,9 @@ public class Responder {
                     JSONObject ackMessage = clientRegistry.messageFlush(receiverConnections, user);
 
                     // Send the ACKs to all servers!
-                    sessionManager.serverBroadcast(ackMessage.toString());
+                    if (ackMessage != null) {
+                        sessionManager.serverBroadcast(ackMessage.toString());
+                    }
 
                     // Send back an ACTIVITY_MESSAGE to the sender, so it can display it on its GUI
                     String processedActivityMsg = MessageProcessor.getActivityMessage(activityMessage);
@@ -161,7 +163,6 @@ public class Responder {
                     JSONArray registry = (JSONArray) json.get("registry");
                     SessionManager.getInstance().getClientRegistry().updateRecords(registry);
                 }
-
             });
 
 
