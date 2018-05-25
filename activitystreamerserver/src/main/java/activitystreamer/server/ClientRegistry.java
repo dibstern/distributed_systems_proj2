@@ -200,7 +200,6 @@ public class ClientRegistry {
 
         // Prepare to send ACK message
         JSONObject ackMessage = new JSONObject();
-        JSONObject theMessages = new JSONObject();
         ackMessage.put("command", "MSG_ACKS");
         ackMessage.put("sender", sender);
         HashMap<Integer, ArrayList<String>> acks = new HashMap<Integer, ArrayList<String>>();
@@ -246,10 +245,7 @@ public class ClientRegistry {
             }
 
             // Report the messages as having been sent
-            acks.forEach((token, recipients) -> {
-                senderRecord.receivedMessage(recipients, token);
-                theMessages.put(token, recipients);
-            });
+            JSONObject theMessages = registerAcks(acks, sender);
 
             // Return the ACKs, to send to servers!
             ackMessage.put("messages", theMessages);
@@ -259,6 +255,27 @@ public class ClientRegistry {
             }
             return ackMessage;
         }
+    }
+
+    public JSONObject registerAcks(HashMap<Integer, ArrayList<String>> acks, String sender) {
+
+        JSONObject theMessages = new JSONObject();
+
+        if (!clientRecords.containsKey(sender)) {
+            System.out.println("ERROR: - registerAcks in clientRegistry - sender: " + sender +
+                    " not in clientRecords" + clientRecords);
+            System.exit(1);
+            return null;
+        }
+
+        ClientRecord senderRecord = clientRecords.get(sender);
+
+        // Report the messages as having been sent
+        acks.forEach((token, recipients) -> {
+            senderRecord.receivedMessage(recipients, token);
+            theMessages.put(token, recipients);
+        });
+        return theMessages;
     }
 
 }

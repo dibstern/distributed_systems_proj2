@@ -478,7 +478,23 @@ public class MessageProcessor {
     }
 
     public static HashMap<Integer, ArrayList<String>> acksToHashmap(Object msgAcksObj) {
+        HashMap<Integer, ArrayList<String>> ackMap = new HashMap<Integer, ArrayList<String>>();
+        JSONObject msgAcksJson = (JSONObject) msgAcksObj;
 
+        // Add each list of tokens and receivers to the HashMap
+        msgAcksJson.forEach((tokenObj, receivedListObj) -> {
+            ArrayList<String> msgs = new ArrayList<String>();
+            Integer token = ((Long) tokenObj).intValue();
+            JSONArray receivedList = (JSONArray) receivedListObj;
+            receivedList.forEach((receiver) -> {
+                msgs.add(receiver.toString());
+            });
+            ackMap.put(token, msgs);
+        });
+        if (ackMap != null) {
+            return ackMap;
+        }
+        return null;
     }
 
 }

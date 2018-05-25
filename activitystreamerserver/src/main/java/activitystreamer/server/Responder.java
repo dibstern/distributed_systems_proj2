@@ -202,8 +202,11 @@ public class Responder {
                     String sender = json.get("sender").toString();
                     JSONObject messageAcks = (JSONObject) json.get("messages");
 
-                    // TODO: Parse & Update Messages in ClientRegistry
-                    //acksToHashmap
+                    // Parse the JSON to create a HashMap of Message ACKs and register them in the ClientRegistry
+                    HashMap<Integer, ArrayList<String>> ackMap = MessageProcessor.acksToHashmap(messageAcks);
+                    if (ackMap != null) {
+                        SessionManager.getInstance().getClientRegistry().registerAcks(ackMap, sender);
+                    }
 
                 }
             });
