@@ -71,7 +71,7 @@ public class Connection extends Thread {
 
     /**
      * Using threaded connections so server can have multiple clients - runs the connection thread whilst the server
-     * still exists, and there are messages being sent to the connnection.
+     * still exists, and there are messages being sent to the connection.
      *
      * TODO: Insert while(retry) loop and a 2 sec delay after a broken network connection
      */
