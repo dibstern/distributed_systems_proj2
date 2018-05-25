@@ -163,6 +163,17 @@ public class ClientRecord {
         return token;
     }
 
+    public void addServerMessage(JSONObject msg, ArrayList<String> recipients, Integer token) {
+        messages.add(new Message(token, msg, recipients));
+        Collections.sort(messages);
+    }
+
+    public void addMessage(Message msg) {
+        messages.add(msg);
+        Collections.sort(messages);
+    }
+
+
     public Message getMessage(Integer token) {
         for (Message message : messages ) {
             if (message.getToken().equals(token)) {
