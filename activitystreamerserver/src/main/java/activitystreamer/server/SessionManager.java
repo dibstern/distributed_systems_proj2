@@ -352,13 +352,13 @@ public class SessionManager extends Thread {
      * @param c The connection a client is using
      * @param username The username supplied by the client
      * @param password The password supplied by the client */
-    public void loginClient(Connection c, String username, String password) {
+    public void loginClient(Connection c, String username, String secret) {
 
         boolean logged_in = false;
         String failure_message = null;
 
         // If the username & secret combination matches the known combination
-        if (clientRegistry.secretCorrect(username, password)) {
+        if (clientRegistry.secretCorrect(username, secret)) {
 
             // Is the connected client still registering with this server?
             if (clientConnections.containsKey(c)) {
@@ -377,7 +377,7 @@ public class SessionManager extends Thread {
             else {
                 // Send login success message, add to client connections hashmap and remove from generic connections
                 // "holding" ArrayList
-                clientConnections.put(c, new ConnectedClient(username, password));
+                clientConnections.put(c, new ConnectedClient(username, secret));
                 connections.remove(c);
                 logged_in = true;
             }
@@ -387,7 +387,7 @@ public class SessionManager extends Thread {
         }
         // Send login success message (Registered & Correct combo) & check for redirection
         if (logged_in) {
-            clientRegistry.logInUser(username);
+            clientRegistry.logInUser(username, secret);
             String msg = MessageProcessor.getLoginSuccessMsg(username);
             log.error("about to call login success message\n");
             c.writeMsg(msg);
@@ -575,17 +575,6 @@ public class SessionManager extends Thread {
     }
 
 
-//    public HashMap<String, HashMap<Integer, ArrayList<String>>> messageFlush() {
-//        HashMap<Integer, ArrayList<String>> sentMessages = new HashMap<Integer, ArrayList<String>>();
-//
-//
-//
-//        return sentMessages;
-//    }
-
-
-
-
 
 
 
@@ -605,7 +594,7 @@ public class SessionManager extends Thread {
      * Removes the connection from the appropriate data structure, depending on who the connection is with.
      * @param con The connection to be closed
      */
-    private synchronized void deleteClosedConnection(Connection con) {
+    public synchronized void deleteClosedConnection(Connection con) {
 
         if (serverConnections.contains(con)) {
             // Close connection to another server
@@ -614,12 +603,12 @@ public class SessionManager extends Thread {
         else if (clientConnections.containsKey(con)) {
             ConnectedClient client = clientConnections.get(con);
             String username = client.getUsername();
+            String secret = client.getSecret();
 
             // TODO: Test this
             if (!username.equals("anonymous")){
-                clientRegistry.logOutUser(username);
+                clientRegistry.logOutUser(username, secret);
             }
-
 
             // Close connection to another client
             clientConnections.remove(con);
@@ -656,9 +645,6 @@ public class SessionManager extends Thread {
         return this.clientRegistry;
     }
 
-
-
-
     /**
      * Getter for clientConnections, given a HashMap of
      * @param receivingUsers A HashMap of Usernames and Secrets
@@ -675,15 +661,4 @@ public class SessionManager extends Thread {
         });
         return connectedClients;
     }
-
-
-
-//    public HashMap<Integer, ArrayList<String>> messageFlush(String sender, Integer token) {
-//        HashMap<Integer, ArrayList<String>> sentMessages = new HashMap<Integer, ArrayList<String>>();
-//        // clientRegistry.
-//
-//
-//        return sentMessages;
-//    }
-
 }
