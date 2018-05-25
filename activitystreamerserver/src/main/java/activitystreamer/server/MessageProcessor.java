@@ -7,6 +7,7 @@ import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 
 /** This class is responsible for generating all of the messages to be sent by the server across the network.
  * It also checks that each message is valid/non-corrupt, and came from an authenticated server or a client that
@@ -41,6 +42,7 @@ public class MessageProcessor {
         boolean containsLoginInfo = json.containsKey("username") &&
                 (json.get("username").toString().equals("anonymous") || containsSecret);
         boolean containsActivity = json.containsKey("activity");
+        boolean containsAMBroadcastInfo = (json.containsKey("recipients") && json.containsKey("token"));
         boolean isValidServerAuthMsg = false;
         if (json.containsKey("registry")) {
             Object registryObj = json.get("registry");
@@ -65,10 +67,12 @@ public class MessageProcessor {
             case "REGISTER":
             case "LOCK_REQUEST":
             case "LOCK_DENIED":
+            case "LOGIN_BROADCAST":
+            case "LOGOUT_BROADCAST":
             case "LOCK_ALLOWED":
                 return (containsLoginInfo ? null : missingFieldMsg);
             case "ACTIVITY_MESSAGE":
-                return (containsLoginInfo && containsActivity ? null : missingFieldMsg);
+                return (containsLoginInfo && containsAMBroadcastInfo && containsActivity ? null : missingFieldMsg);
             case "ACTIVITY_BROADCAST":
                 return (containsActivity ? null : missingFieldMsg);
             case "SERVER_ANNOUNCE":
@@ -79,6 +83,8 @@ public class MessageProcessor {
                 return (json.containsKey("info") ? null : missingFieldMsg);
             case "LOGOUT":
                 return null;
+            case "MSG_ACKS":
+                return (json.containsKey("sender") && json.containsKey("messages") ? null : missingFieldMsg);
             // Unrecognised command -> Return false, triggering an INVALID_MESSAGE
             default:
                 return "the received message contained an unrecognised command: " + command;
@@ -201,6 +207,9 @@ public class MessageProcessor {
             case "LOCK_REQUEST":
             case "LOCK_DENIED":
             case "LOCK_ALLOWED":
+            case "MSG_ACKS":
+            case "LOGIN_BROADCAST":
+            case "LOGOUT_BROADCAST":
                 if (!serverAuthenticated) {
                    return "Message received from an unauthenticated server";
                 }
@@ -221,6 +230,20 @@ public class MessageProcessor {
             default:
                 return "the received message contained an unrecognised command: " + command;
         }
+    }
+
+    public static Gson getGson() {
+        if (gson == null) {
+            gson = new Gson();
+        }
+        return gson;
+    }
+
+    public static JSONParser getJsonParser() {
+        if (jsonParser == null) {
+            jsonParser = new JSONParser();
+        }
+        return jsonParser;
     }
 
     /**
@@ -404,26 +427,58 @@ public class MessageProcessor {
      * @param json The activity message
      * @return Msg the message to be sent across the network*/
     public static String getActivityBroadcastMsg(JSONObject json, ArrayList<String> loggedInUsers, Integer msgToken) {
+
+        // Add all the Activity_Message fields and values (command, username, secret, activity)
         JSONObject msg = new JSONObject();
+        msg.putAll(json);
+
+        // Rename the command
         msg.put("command", "ACTIVITY_BROADCAST");
-        msg.put("activity", json);
+
+        // Add the token and the recipients
         msg.put("token", msgToken);
         JSONObject recipientsJson = toJson(getGson().toJson(loggedInUsers), true, "recipients");
         msg.putAll(recipientsJson);
         return msg.toString();
     }
 
-    public static Gson getGson() {
-        if (gson == null) {
-            gson = new Gson();
-        }
-        return gson;
+
+    public static String getLoginBroadcast(String user, String secret) {
+        JSONObject msg = new JSONObject();
+        msg.put("command", "LOGIN_BROADCAST");
+        msg.put("username", user);
+        msg.put("secret", secret);
+        return msg.toString();
     }
 
-    public static JSONParser getJsonParser() {
-        if (jsonParser == null) {
-            jsonParser = new JSONParser();
-        }
-        return jsonParser;
+    public static String getLogoutBroadcast(String user, String secret) {
+        JSONObject msg = new JSONObject();
+        msg.put("command", "LOGOUT_BROADCAST");
+        msg.put("username", user);
+        msg.put("secret", secret);
+        return msg.toString();
     }
+
+    public static JSONObject processActivityMessage(JSONObject activityMsg) {
+
+        String user = activityMsg.get("username").toString();
+        String secret = activityMsg.get("secret").toString();
+        String command = activityMsg.get("command").toString();
+        JSONObject activityMessage = (JSONObject) activityMsg.get("activity");
+        activityMessage.put("authenticated_user", user);
+
+        // Create new processed message
+        JSONObject processedMsg = new JSONObject();
+        processedMsg.put("username", user);
+        processedMsg.put("secret", secret);
+        processedMsg.put("command", command);
+        processedMsg.put("activityMessage", activityMessage);
+
+        return processedMsg;
+    }
+
+    public static HashMap<Integer, ArrayList<String>> acksToHashmap(Object msgAcksObj) {
+
+    }
+
 }
