@@ -107,6 +107,10 @@ public class Message implements Comparable<Message> {
         return remaining_recipients.contains(user);
     }
 
+    public ArrayList<String> getRemainingRecipients() {
+        return this.remaining_recipients;
+    }
+
 
 
     // ------------------ COMPARING MESSAGES ------------------
