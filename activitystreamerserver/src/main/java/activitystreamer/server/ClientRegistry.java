@@ -29,14 +29,12 @@ public class ClientRegistry {
      *  - Has a "command" field labeled "CLIENT_REGISTRY"
      *  - Has a "registry" field with a valid JSONArray (this is ensured anyway)
      *  - TCP Ensures error-free data transfer, so we can assume all messages are well formed (as we created them)
-     * @param ...
+     * @param registry ...
      */
     public void updateRecords(JSONArray registry) {
 
         // Iterate through Array
         registry.forEach((clientRecordObject) -> {
-
-            // TODO: UPDATE THIS (ALL BELOW)
 
             // Convert each record into a JSONObject
             JSONObject clientRecordJson = (JSONObject) clientRecordObject;
@@ -97,13 +95,15 @@ public class ClientRegistry {
         return record.sameSecret(secret);
     }
 
-    public void logInUser(String user) {
-        // TODO: Login Broadcast
+    public void logInUser(String user, String secret) {
+        String broadcastMsg = MessageProcessor.getLoginBroadcast(user, secret);
+        SessionManager.getInstance().serverBroadcast(broadcastMsg);
         clientRecords.get(user).setLoggedIn(true);
     }
 
-    public void logOutUser(String user) {
-        // TODO: Logout Broadcast
+    public void logOutUser(String user, String secret) {
+        String broadcastMsg = MessageProcessor.getLogoutBroadcast(user, secret);
+        SessionManager.getInstance().serverBroadcast(broadcastMsg);
         clientRecords.get(user).setLoggedIn(false);
     }
 
@@ -153,7 +153,7 @@ public class ClientRegistry {
         return clientCredentials;
     }
 
-    public Integer addMessageToRegistry(String sender, JSONObject activityMsg, ArrayList<String> loggedInUsers) {
+    public Integer addClientMsgToRegistry(String sender, JSONObject activityMsg, ArrayList<String> loggedInUsers) {
         Integer token = -1;
         if (clientRecords.containsKey(sender)) {
             token = clientRecords.get(sender).addMessage(activityMsg, loggedInUsers);
@@ -162,10 +162,14 @@ public class ClientRegistry {
             return token;
         }
         else {
-            System.out.println("ERROR - addMessageToRegistry - " + sender + " not in clientRecords: " + clientRecords);
+            System.out.println("ERROR - addClientMsgToRegistry - " + sender + " not in clientRecords: " + clientRecords);
             System.exit(1);
             return token;
         }
+    }
+
+    public void addMessageToRegistry(Message msg, String user) {
+        clientRecords.get(user).addMessage(msg);
     }
 
     public Message getMessage(String sender, Integer token) {
