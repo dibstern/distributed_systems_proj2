@@ -74,23 +74,23 @@ public class Responder {
                 @Override
                 public void execute(JSONObject json, Connection con) {
 
-                    // `Process` the message
+                    // Initial Setup
                     String user = json.get("username").toString();
-                    JSONObject activityMessage = (JSONObject) json.get("activity");
-                    activityMessage.put("authenticated_user", user);
-
                     SessionManager sessionManager = SessionManager.getInstance();
                     ClientRegistry clientRegistry = sessionManager.getClientRegistry();
+
+                    // `Process` the message
+                    JSONObject clientMessage = MessageProcessor.processActivityMessage(json);
 
                     // Retrieve the logged in users (known to the clientRegistry at this time)
                     ArrayList<String> loggedInUsers = clientRegistry.getLoggedInUsers();
 
                     // Add message and its expected recipients to ClientRegistry and retrieve the allocated token
-                    Integer msgToken = clientRegistry.addMessageToRegistry(user, activityMessage, loggedInUsers);
+                    Integer msgToken = clientRegistry.addClientMsgToRegistry(user, clientMessage, loggedInUsers);
 
                     // Add message token & recipients to ACTIVITY_BROADCAST message
-                    String activityBroadcastMsg = MessageProcessor.getActivityBroadcastMsg(activityMessage,
-                                                                                           loggedInUsers, msgToken);
+                    String activityBroadcastMsg = MessageProcessor.getActivityBroadcastMsg(clientMessage, loggedInUsers,
+                                                                                           msgToken);
                     // Send ACTIVITY_BROADCAST to other servers
                     sessionManager.serverBroadcast(activityBroadcastMsg);
 
@@ -107,7 +107,7 @@ public class Responder {
                     }
 
                     // Send back an ACTIVITY_MESSAGE to the sender, so it can display it on its GUI
-                    String processedActivityMsg = MessageProcessor.getActivityMessage(activityMessage);
+                    String processedActivityMsg = MessageProcessor.getActivityMessage(clientMessage);
                     con.writeMsg(processedActivityMsg);
                 }
             });
@@ -172,25 +172,56 @@ public class Responder {
                 @Override
                 public void execute(JSONObject json, Connection con) {
 
-                    // TODO: 1. Send only if tokens are matching and msg is unsent,
-                    // TODO: 2. Update ClientRegistry's ClientRecords.expected_tokens,
-                    // TODO: 3. Send all waiting msgs if appropriate
-                    // TODO: 4. Create and send ACK messages after sending to clients
-                    // TODO: 5. Create Ability to process ACK messages and update ClientRegistry based on these ACKs.
-                    SessionManager.getInstance().broadcastMessage(con, json.toString());
+                    // Forward message onto all other servers
+                    SessionManager sessionManager = SessionManager.getInstance();
+                    sessionManager.forwardServerMsg(con, json.toString());
 
+                    // Add message to ClientRegistry
+                    ClientRegistry clientRegistry = sessionManager.getClientRegistry();
+                    String sender = json.get("username").toString();
+                    Message received_message = new Message(json);
+                    clientRegistry.addMessageToRegistry(received_message, sender);
+
+                    ArrayList<String> remaining_recipients = received_message.getRemainingRecipients();
+
+                    // Retrieve client connections matching the usernames & passwords of loggedInUsers
+                    HashMap<String, Connection> receiverConnections = sessionManager.getClientConnections(
+                            clientRegistry.getClientCredentials(remaining_recipients));
+
+                    // Send all waiting messages, if appropriate
+                    JSONObject ackMsg = clientRegistry.messageFlush(receiverConnections, sender);
+                    if (ackMsg != null) {
+                        sessionManager.serverBroadcast(ackMsg.toString());
+                    }
                 }
             });
-            /* Logout message received from client by server.
-             * Do not need to perform any additional checks as command checked upon calling function,
-             * and no other fields are required.
-             * Tells server to close connection. **/
+            /* ... **/
             responses.put("MSG_ACKS", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
+                    String sender = json.get("sender").toString();
+                    JSONObject messageAcks = (JSONObject) json.get("messages");
+
                     // TODO: Parse & Update Messages in ClientRegistry
+                    //acksToHashmap
 
+                }
+            });
 
+            /* ... **/
+            responses.put("LOGIN_BROADCAST", new ServerCommand() {
+                @Override
+                public void execute(JSONObject json, Connection con) {
+
+                    // TODO: Parse & Update Messages in ClientRegistry
+                }
+            });
+
+            /* ... **/
+            responses.put("LOGOUT_BROADCAST", new ServerCommand() {
+                @Override
+                public void execute(JSONObject json, Connection con) {
+                    // TODO: Parse & Update Messages in ClientRegistry
                 }
             });
 
