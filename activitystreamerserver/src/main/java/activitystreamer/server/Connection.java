@@ -13,6 +13,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import activitystreamer.util.Settings;
+import org.json.simple.JSONObject;
 
 /** This class handles all of the connections a server has */
 public class Connection extends Thread {
@@ -24,6 +25,9 @@ public class Connection extends Thread {
     private boolean open = false;
     private Socket socket;
     private boolean term = false;
+
+    private static final boolean DEBUG = true;
+    private static final boolean PRINT_SERVER_STATUS = true;
 
     Connection(Socket socket) throws IOException {
 
@@ -45,11 +49,30 @@ public class Connection extends Thread {
         StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();
         if (open) {
             outwriter.println(msg);
-            System.out.println("Sending: " + msg);
+            printDebugMessages(msg, true);
             return true;
         }
         return false;
     }
+
+    private synchronized void printDebugMessages(String msg, boolean sending) {
+
+        if (PRINT_SERVER_STATUS) {
+            JSONObject msgJson = MessageProcessor.toJson(msg, false, "");
+            if (msgJson.containsKey("command") && msgJson.get("command").toString().equals("SERVER_ANNOUNCE")) {
+                String serverHostname = msgJson.get("hostname").toString();
+                int serverLoad = ((Long) msgJson.get("load")).intValue();
+                int serverPort = ((Long) msgJson.get("port")).intValue();
+                String registryString = msgJson.get("registry").toString();
+                log.info("    Server " + serverPort + " has load: " + serverLoad + ". Registry: " + registryString);
+            }
+            else if (DEBUG) {
+                String messageAction = (sending ? "Sending: " : "Receiving: ");
+                log.info(messageAction + msg);
+            }
+        }
+    }
+
 
     /**
      * Closes a connection and handles appropriate shutdown
@@ -82,16 +105,18 @@ public class Connection extends Thread {
             String data;
             while (!term && (data = inreader.readLine()) != null) {
                 term = SessionManager.getInstance().process(this, data);
-                System.out.println("Receiving: " + data);
+                printDebugMessages(data, false);
             }
             log.debug("connection closed to " + Settings.socketAddress(socket));
-            SessionManager.getInstance().deleteClosedConnection(this);
+            String closeContext = "Close Connection Context: connection closed naturally (in run, in Connection)";
+            SessionManager.getInstance().deleteClosedConnection(this, closeContext);
             in.close();
             // retry = false;
         }
         catch (IOException e) {
             log.error("connection " + Settings.socketAddress(socket) + " closed with exception: " + e);
-            SessionManager.getInstance().deleteClosedConnection(this);
+            String closeContext = "Close Connection Context: connection closed with exception (in run, in Connection)";
+            SessionManager.getInstance().deleteClosedConnection(this, closeContext);
         }
         open = false;
     }

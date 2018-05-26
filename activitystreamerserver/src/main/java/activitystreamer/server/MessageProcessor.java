@@ -26,7 +26,7 @@ public class MessageProcessor {
      */
     public static String hasValidCommandAndFields(JSONObject json) {
 
-        String typeErrorMsg = "Type Error! Some of the values in the json message have the incorrect type";
+        String typeErrorMsg = "Type Error! Some of the values in the json message have the incorrect type: ";
 
         if (!json.containsKey("command")) {
             return "the received message did not contain a command";
@@ -34,7 +34,7 @@ public class MessageProcessor {
 
         String typeIssue = ensureTypesCorrect(json);
         if (typeIssue != null) {
-            return typeErrorMsg;
+            return typeErrorMsg + typeIssue;
         }
 
         // Get the required information from the JSONObject
@@ -67,14 +67,15 @@ public class MessageProcessor {
             case "REGISTER":
             case "LOCK_REQUEST":
             case "LOCK_DENIED":
-            case "LOGIN_BROADCAST":
-            case "LOGOUT_BROADCAST":
             case "LOCK_ALLOWED":
                 return (containsLoginInfo ? null : missingFieldMsg);
+            case "LOGIN_BROADCAST":
+            case "LOGOUT_BROADCAST":
+                return (containsLoginInfo && json.containsKey("token") ? null : missingFieldMsg);
             case "ACTIVITY_MESSAGE":
-                return (containsLoginInfo && containsAMBroadcastInfo && containsActivity ? null : missingFieldMsg);
+                return (containsLoginInfo && containsActivity ? null : missingFieldMsg);
             case "ACTIVITY_BROADCAST":
-                return (containsActivity ? null : missingFieldMsg);
+                return (containsActivity && containsLoginInfo && containsAMBroadcastInfo? null : missingFieldMsg);
             case "SERVER_ANNOUNCE":
                 return ((json.containsKey("id") && json.containsKey("load") && json.containsKey("hostname") &&
                         json.containsKey("port") && json.containsKey("registry")) ? null : missingFieldMsg);
@@ -159,7 +160,7 @@ public class MessageProcessor {
      * Returns an error message if the sender is not authenticated / logged in / registered, otherwise null
      * @param json The JSON object received by the server
      * @param con The connection the JSON object was sent on
-     * @return
+     * @return ...
      */
     public static String validSender(JSONObject json, Connection con) {
 
@@ -169,19 +170,21 @@ public class MessageProcessor {
         String secret = null;
 
         if (json.containsKey("username")) {
-            username = (String) json.get("username").toString();
+            username = json.get("username").toString();
             if (!username.equals("anonymous") && json.containsKey("secret")) {
-                secret = (String) json.get("secret").toString();
+                secret = json.get("secret").toString();
             }
         }
 
+        SessionManager sessionManager = SessionManager.getInstance();
+
         // Check that the server is authenticated OR client logged in, depending on connection type
-        boolean serverAuthenticated = SessionManager.getInstance().checkServerAuthenticated(con);
-        boolean clientLoggedIn = SessionManager.getInstance().checkClientLoggedIn(con);
+        boolean serverAuthenticated = sessionManager.checkServerAuthenticated(con);
+        boolean clientLoggedIn = sessionManager.checkClientLoggedIn(con);
 
         // Check client has logged in, and if username is NOT anonymous, username and secret match that stored locally
-        boolean validClient = (clientLoggedIn && (username.equals("anonymous") || (username != null &&
-                secret != null && SessionManager.getInstance().getClientRegistry().secretCorrect(username, secret))));
+        boolean validClient = (clientLoggedIn && ((username != null && secret != null &&
+                sessionManager.getClientRegistry().secretCorrect(username, secret)) || username.equals("anonymous")));
 
         switch(command) {
 
@@ -259,9 +262,10 @@ public class MessageProcessor {
             if (dataIsArray) {
                 JSONArray jsonData = (JSONArray) getJsonParser().parse(data);
                 json = new JSONObject();
-                json.put(keyString, dataIsArray);
+                json.put(keyString, jsonData);
                 return json;
             }
+            // System.out.println("If Error, was parsing: " + data);
             return (JSONObject) getJsonParser().parse(data);
         }
         catch (ParseException e) {
@@ -312,16 +316,6 @@ public class MessageProcessor {
         msg.put("command", "REDIRECT");
         msg.put("hostname", hostName);
         msg.put("port", portNum);
-        return msg.toString();
-    }
-
-    /** Creates an ACTIVITY_MESSAGE message to be sent across the network.
-     * @param json The activity message
-     * @return Msg the message to be sent across the network*/
-    public static String getActivityMessage(JSONObject json) {
-        JSONObject msg = new JSONObject();
-        msg.put("command", "ACTIVITY_MESSAGE");
-        msg.put("activity", json);
         return msg.toString();
     }
 
@@ -423,6 +417,35 @@ public class MessageProcessor {
         return msg.toString();
     }
 
+    public static String getLoginBroadcast(String user, String secret, Integer token) {
+        JSONObject msg = new JSONObject();
+        msg.put("command", "LOGIN_BROADCAST");
+        msg.put("username", user);
+        msg.put("secret", secret);
+        msg.put("token", token);
+        return msg.toString();
+    }
+
+    public static String getLogoutBroadcast(String user, String secret, Integer token) {
+        JSONObject msg = new JSONObject();
+        msg.put("command", "LOGOUT_BROADCAST");
+        msg.put("username", user);
+        msg.put("secret", secret);
+        msg.put("token", token);
+        return msg.toString();
+    }
+
+    /** Creates an ACTIVITY_MESSAGE message to be sent across the network.
+     * @param json The activity message
+     * @return Msg the message to be sent across the network*/
+    public static String getActivityMessage(JSONObject json) {
+        JSONObject msg = new JSONObject();
+        msg.put("command", "ACTIVITY_MESSAGE");
+        msg.put("activity", json);
+        return msg.toString();
+    }
+
+
     /** Creates an ACTIVITY_BROADCAST message to be sent across the network.
      * @param json The activity message
      * @return Msg the message to be sent across the network*/
@@ -442,23 +465,6 @@ public class MessageProcessor {
         return msg.toString();
     }
 
-
-    public static String getLoginBroadcast(String user, String secret) {
-        JSONObject msg = new JSONObject();
-        msg.put("command", "LOGIN_BROADCAST");
-        msg.put("username", user);
-        msg.put("secret", secret);
-        return msg.toString();
-    }
-
-    public static String getLogoutBroadcast(String user, String secret) {
-        JSONObject msg = new JSONObject();
-        msg.put("command", "LOGOUT_BROADCAST");
-        msg.put("username", user);
-        msg.put("secret", secret);
-        return msg.toString();
-    }
-
     public static JSONObject processActivityMessage(JSONObject activityMsg) {
 
         String user = activityMsg.get("username").toString();
@@ -472,12 +478,12 @@ public class MessageProcessor {
         processedMsg.put("username", user);
         processedMsg.put("secret", secret);
         processedMsg.put("command", command);
-        processedMsg.put("activityMessage", activityMessage);
+        processedMsg.put("activity", activityMessage);
 
         return processedMsg;
     }
 
-    public static HashMap<Integer, ArrayList<String>> acksToHashmap(Object msgAcksObj) {
+    public static HashMap<Integer, ArrayList<String>> acksToHashMap(Object msgAcksObj) {
         HashMap<Integer, ArrayList<String>> ackMap = new HashMap<Integer, ArrayList<String>>();
         JSONObject msgAcksJson = (JSONObject) msgAcksObj;
 
@@ -486,15 +492,20 @@ public class MessageProcessor {
             ArrayList<String> msgs = new ArrayList<String>();
             Integer token = ((Long) tokenObj).intValue();
             JSONArray receivedList = (JSONArray) receivedListObj;
-            receivedList.forEach((receiver) -> {
-                msgs.add(receiver.toString());
-            });
+            receivedList.forEach((receiver) -> msgs.add(receiver.toString()));
             ackMap.put(token, msgs);
         });
-        if (ackMap != null) {
+        if (!ackMap.isEmpty()) {
             return ackMap;
         }
         return null;
+    }
+
+    public static JSONObject getStartAckMsg(String sender) {
+        JSONObject ackMessage = new JSONObject();
+        ackMessage.put("command", "MSG_ACKS");
+        ackMessage.put("sender", sender);
+        return ackMessage;
     }
 
 }

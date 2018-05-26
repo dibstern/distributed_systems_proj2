@@ -1,6 +1,7 @@
 package activitystreamer.server;
 
 import com.google.gson.reflect.TypeToken;
+import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
 import java.lang.reflect.Type;
@@ -36,7 +37,7 @@ public class ClientRecord {
         // TODO: Check that this works!!
         Type collectionType = new TypeToken<ArrayList<Message>>(){}.getType();
         this.messages = MessageProcessor.getGson().fromJson(
-                ((JSONObject) clientRecordJson.get("messages")).toJSONString(),
+                ((JSONArray) clientRecordJson.get("messages")).toJSONString(),
                 collectionType);
     }
 
@@ -48,7 +49,7 @@ public class ClientRecord {
     public void updateRecord(JSONObject registryObject) {
 
         // Update Logged In Status
-        updateLoggedIn(((Long) registryObject.get("logged_in")).intValue());
+        updateLoggedIn(((Long) registryObject.get("logged_in")).intValue(), "Updating Record");
 
         updateLastMessageCleared(((Long) registryObject.get("last_message_cleared")).intValue());
         // Update Messages
@@ -62,6 +63,7 @@ public class ClientRecord {
             this.last_message_cleared = lastMessageCleared;
         }
         // TODO: Delete the associated cleared message, if it exists?
+        // TODO: Do we want to do this, or just rely on receivedMessage?
         // Would be simply: deleteMessage(lastMessageCleared);
     }
 
@@ -104,40 +106,54 @@ public class ClientRecord {
      *
      * @param newLoggedIn
      */
-    public void updateLoggedIn(Integer newLoggedIn) {
-        if (newLoggedIn > this.logged_in || this.logged_in == Integer.MAX_VALUE) {
+    public Integer updateLoggedIn(Integer newLoggedIn, String loginContext) {
+        if ((newLoggedIn > this.logged_in || this.logged_in == Integer.MAX_VALUE) && newLoggedIn > 0) {
             this.logged_in = newLoggedIn;
+
+            if (this.logged_in % 2 == 0) {
+                System.out.println("Logging In " + this.username);
+            }
+            else {
+                System.out.println("Logging Out " + this.username);
+            }
+            System.out.println(loginContext + "; this.logged_in = " + this.logged_in);
+
+            return this.logged_in;
         }
+        return -4;
     }
+
+//    /**
+//     *
+//     * @param loginToken
+//     * @param loginContext
+//     * @return ...
+//     */
+//    public Integer setLoggedIn(Integer loginToken, String loginContext) {
+//
+//        if (loginToken > this.logged_in || this.logged_in == Integer.MAX_VALUE) {
+//            return incrementLoggedIn();
+//        }
+//        else {
+//            System.out.println("LOGIN CONTEXT --  " + loginContext);
+//            System.out.println("ERROR: Logging in, in setLoggedIn. Received token " + loginToken +
+//                               ", have " + this.logged_in);
+//            System.exit(1);
+//            return getLoggedInToken();
+//        }
+//    }
 
     /**
      *
-     * @param now_loggedIn
      */
-    public void setLoggedIn(boolean now_loggedIn) {
-        boolean currentlyLoggedIn = loggedIn();
-        if (now_loggedIn && !currentlyLoggedIn) {
-            incrementLoggedIn();
-        }
-        else if (!now_loggedIn && currentlyLoggedIn) {
-            incrementLoggedIn();
-        }
-        else {
-            System.out.println("ERROR: Attempting to set logged_in to same value.");
-            System.exit(1);
-        }
-    }
-
-    /**
-     *
-     */
-    public void incrementLoggedIn() {
+    public Integer incrementLoggedIn() {
         if (this.logged_in == Integer.MAX_VALUE) {
             this.logged_in = 2;
         }
         else {
             this.logged_in += 1;
         }
+        return this.logged_in;
     }
 
     /**
@@ -146,6 +162,10 @@ public class ClientRecord {
      */
     public boolean loggedIn() {
         return this.logged_in % 2 == 0;
+    }
+
+    public Integer getLoggedInToken() {
+        return this.logged_in;
     }
 
 

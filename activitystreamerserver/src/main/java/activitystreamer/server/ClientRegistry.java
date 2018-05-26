@@ -1,7 +1,10 @@
 package activitystreamer.server;
 
+import activitystreamer.util.LoginException;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
+
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -56,10 +59,16 @@ public class ClientRegistry {
             }
             // Or create a new record
             else {
-                clientRecords.put(username, new ClientRecord(clientRecordJson));
+                addRecord(username, new ClientRecord(clientRecordJson));
             }
         });
     }
+
+    private void addRecord(String user, ClientRecord clientRecord) {
+        clientRecords.put(user, clientRecord);
+        System.out.println("            Added " + user + " to the registry: " + clientRecords);
+    }
+
 
     /**
      * Retrieve the server's Client Registry in the form of a JSONArray.
@@ -79,45 +88,75 @@ public class ClientRegistry {
         String jsonArrayString = MessageProcessor.getGson().toJson(recordArray);
 
         // Returns a JSONObject
-        return MessageProcessor.toJson(jsonArrayString, true, "registry");
+        JSONObject clientRegistryJsonObj = MessageProcessor.toJson(jsonArrayString, true, "registry");
+        return clientRegistryJsonObj;
     }
 
-
     public void addFreshClient(String username, String secret) {
-        clientRecords.put(username, new ClientRecord(username, secret));
+        ClientRecord record = new ClientRecord(username, secret);
+        addRecord(username, record);
     }
 
     public boolean secretCorrect(String username, String secret) {
         if (!userExists(username)) {
             return false;
         }
-        ClientRecord record = clientRecords.get(username);
+        ClientRecord record = getClientRecord(username);
         return record.sameSecret(secret);
     }
 
-    public void logInUser(String user, String secret) {
-        String broadcastMsg = MessageProcessor.getLoginBroadcast(user, secret);
-        SessionManager.getInstance().serverBroadcast(broadcastMsg);
-        clientRecords.get(user).setLoggedIn(true);
+    public Integer loginUser(String user, String secret, String loginContext, Integer optionalToken) {
+        int tokenSent = setLogin(user, loginContext, true, optionalToken);
+        System.out.println("Trying to login: " + user + ". token: " + tokenSent);
+        System.out.println("CONTEXT: " + loginContext);
+        return tokenSent;
     }
 
-    public void logOutUser(String user, String secret) {
-        String broadcastMsg = MessageProcessor.getLogoutBroadcast(user, secret);
-        SessionManager.getInstance().serverBroadcast(broadcastMsg);
-        clientRecords.get(user).setLoggedIn(false);
+    public Integer logoutUser(String user, String secret, String loginContext, Integer optionalToken) {
+        int tokenSent = setLogin(user, loginContext, false, optionalToken);
+        System.out.println("Trying to logout: " + user + ". token: " + tokenSent);
+        System.out.println("CONTEXT: " + loginContext);
+        if (tokenSent != -4 && tokenSent != -2) {
+            SessionManager.getInstance().serverBroadcast(MessageProcessor.getLogoutBroadcast(user, secret, tokenSent));
+        }
+        return tokenSent;
     }
 
-
-
-
-    public boolean userExists(String user) {
-        return clientRecords.containsKey(user);
+    // TODO: Get rid of Magic Numbers
+    private Integer setLogin(String user, String loginContext, boolean login, Integer optionalToken) {
+        int tokenUsed;
+        if (optionalToken != -2) {
+            tokenUsed = optionalToken;
+        }
+        else {
+            tokenUsed = getLoginToken(user, login) + 1;
+        }
+        int validToken = getClientRecord(user).updateLoggedIn(tokenUsed, loginContext);
+        if (validToken == -4) {
+            return null;
+        }
+        return validToken;
     }
 
-    public void removeUser(String username) {
-        clientRecords.remove(username);
+    private Integer getLoginToken(String user, Boolean login) {
+        ClientRecord clientRecord = getClientRecord(user);
+        boolean loggedIn = clientRecord.loggedIn();
+        try {
+            if ((!loggedIn && login) || (loggedIn && !login)) {
+                return clientRecord.getLoggedInToken();
+            }
+            else {
+                String status = (loggedIn ? "Status: Logged in. " : "Status: Logged out. ");
+                String update = (login ? "Update: Login attempt. " : "Update: Logout attempt. ");
+                throw new LoginException("User: " + user + ". " + status + update);
+            }
+        }
+        catch (LoginException e) {
+            e.printStackTrace();
+            System.exit(1);
+            return -2;
+        }
     }
-
 
     /**
      * Retrieve a list of all of the ClientRecords that are "logged in"
@@ -135,6 +174,13 @@ public class ClientRegistry {
         return loggedInUsers;
     }
 
+    public boolean userExists(String user) {
+        return clientRecords.containsKey(user);
+    }
+
+    public void removeUser(String username) {
+        clientRecords.remove(username);
+    }
 
     /**
      * Retrieves a map of usernames and passwords, for comparison, for all usernames provided
@@ -153,44 +199,23 @@ public class ClientRegistry {
         return clientCredentials;
     }
 
+
+    // ------------------------------ MESSAGE HANDLING ------------------------------
+
     public Integer addClientMsgToRegistry(String sender, JSONObject activityMsg, ArrayList<String> loggedInUsers) {
-        Integer token = -1;
-        if (clientRecords.containsKey(sender)) {
-            token = clientRecords.get(sender).addMessage(activityMsg, loggedInUsers);
-        }
-        if (token != -1) {
-            return token;
-        }
-        else {
-            System.out.println("ERROR - addClientMsgToRegistry - " + sender + " not in clientRecords: " + clientRecords);
-            System.exit(1);
-            return token;
-        }
+        return getClientRecord(sender).addMessage(activityMsg, loggedInUsers);
     }
 
     public void addMessageToRegistry(Message msg, String user) {
-        clientRecords.get(user).addMessage(msg);
+        getClientRecord(user).addMessage(msg);
     }
 
     public Message getMessage(String sender, Integer token) {
-        if (clientRecords.containsKey(sender)) {
-            return clientRecords.get(sender).getMessage(token);
-        }
-        else {
-            System.out.println("ERROR - getMessage - " + sender + " not in clientRecords: " + clientRecords);
-            System.exit(1);
-        }
-        return null;
+        return getClientRecord(sender).getMessage(token);
     }
 
     public void receivedMessage(String sender, ArrayList<String> receivers, Integer token) {
-        if (clientRecords.containsKey(sender)) {
-            clientRecords.get(sender).receivedMessage(receivers, token);
-        }
-        else {
-            System.out.println("ERROR - receivedMessage - " + sender + " not in clientRecords: " + clientRecords);
-            System.exit(1);
-        }
+        getClientRecord(sender).receivedMessage(receivers, token);
     }
 
 
@@ -198,77 +223,58 @@ public class ClientRegistry {
 
         boolean noMessagesSent = true;
 
-        // Prepare to send ACK message
-        JSONObject ackMessage = new JSONObject();
-        ackMessage.put("command", "MSG_ACKS");
-        ackMessage.put("sender", sender);
+        // To collect tokens and clients who received messages of that token number from the sender
         HashMap<Integer, ArrayList<String>> acks = new HashMap<Integer, ArrayList<String>>();
 
-        if (!clientRecords.containsKey(sender)) {
-            System.out.println("ERROR: - messageFlush in clientRegistry - sender: " + sender +
-                               " not in clientRecords" + clientRecords);
-            System.exit(1);
-            ackMessage.put("status", "failure");
-            return ackMessage;
-        }
-        else {
-            ClientRecord senderRecord = clientRecords.get(sender);
+        ClientRecord senderRecord = getClientRecord(sender);
 
-            clientConnections.forEach((user, con) -> {
-                Message m;
-                // Send all possible messages to client
-                do {
-                    m = senderRecord.getNextMessage(user);
-                    if (m != null) {
+        clientConnections.forEach((user, con) -> {
 
-                        // Send the message
-                        JSONObject activityBroadcastMsg = m.getClientMessage();
-                        Integer token = m.getToken();
-                        con.writeMsg(activityBroadcastMsg.toString());
+            // Send all possible messages to client
+            Message m = senderRecord.getNextMessage(user);
+            while (m != null) {
 
-                        // Add an ACK
-                        if (acks.containsKey(token)) {
-                            ArrayList<String> users = new ArrayList<String>();
-                            users.add(user);
-                            acks.put(token, users);
-                        }
-                        else {
-                            acks.get(token).add(user);
-                        }
-                    }
-                } while (m != null);
-            });
+                // Send the message
+                JSONObject activityBroadcastMsg = m.getClientMessage();
+                Integer token = m.getToken();
+                con.writeMsg(activityBroadcastMsg.toString());
 
-            // Return null if no messages sent
-            if (!acks.isEmpty()) {
-                noMessagesSent = false;
+                // Add an ACK
+                if (acks.containsKey(token)) {
+                    ArrayList<String> users = new ArrayList<String>();
+                    users.add(user);
+                    acks.put(token, users);
+                }
+                else {
+                    acks.get(token).add(user);
+                }
+                m = senderRecord.getNextMessage(user);
             }
+        });
 
-            // Report the messages as having been sent
-            JSONObject theMessages = registerAcks(acks, sender);
-
-            // Return the ACKs, to send to servers!
-            ackMessage.put("messages", theMessages);
-
-            if (noMessagesSent) {
-                return null;
-            }
-            return ackMessage;
+        // Return null if no messages sent
+        if (!acks.isEmpty()) {
+            noMessagesSent = false;
         }
+
+        // Report the messages as having been sent
+        JSONObject theMessages = registerAcks(acks, sender);
+
+        // Return the ACKs, to send to servers!
+        JSONObject ackMessage = MessageProcessor.getStartAckMsg(sender);
+        ackMessage.put("messages", theMessages);
+
+        if (noMessagesSent) {
+            return null;
+        }
+        return ackMessage;
     }
 
     public JSONObject registerAcks(HashMap<Integer, ArrayList<String>> acks, String sender) {
 
         JSONObject theMessages = new JSONObject();
 
-        if (!clientRecords.containsKey(sender)) {
-            System.out.println("ERROR: - registerAcks in clientRegistry - sender: " + sender +
-                    " not in clientRecords" + clientRecords);
-            System.exit(1);
-            return null;
-        }
-
-        ClientRecord senderRecord = clientRecords.get(sender);
+        ClientRecord senderRecord = getClientRecord(sender);
 
         // Report the messages as having been sent
         acks.forEach((token, recipients) -> {
@@ -276,6 +282,23 @@ public class ClientRegistry {
             theMessages.put(token, recipients);
         });
         return theMessages;
+    }
+
+
+
+
+
+
+    // ------------------------------ GENERAL GETTERS & SETTTERS ------------------------------
+
+    private ClientRecord getClientRecord(String user) {
+        if (!clientRecords.containsKey(user)) {
+            System.out.println("ERROR: - getClientRecord in clientRegistry - user: " + user +
+                    " not in clientRecords" + clientRecords);
+            System.exit(1);
+            return null;
+        }
+        return clientRecords.get(user);
     }
 
 }

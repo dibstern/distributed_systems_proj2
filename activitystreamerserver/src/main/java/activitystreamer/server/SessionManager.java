@@ -4,9 +4,7 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.concurrent.ConcurrentHashMap;
 
-import com.sun.deploy.util.SessionState;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -108,11 +106,11 @@ public class SessionManager extends Thread {
         JSONObject json = MessageProcessor.toJson(msg, false, "status");
 
         // If we couldn't parse the message, notify the sender and disconnect
-        if (json.containsKey("status") && ((String) json.get("status")).equals("failure")) {
-            return messageInvalid(con, "Incorrect Message. Json parse error.");
+        if (json.containsKey("status") && (json.get("status").toString()).equals("failure")) {
+            return messageInvalid(con, "Incorrect Message. Json parse error, parsing: " + msg);
         }
 
-        log.info("Received Message: " + msg);
+        // log.info("Received Message: " + msg);
 
         // Check that a message contains a valid command, and that it has the required fields
         String invalidMsgStructureMsg = MessageProcessor.hasValidCommandAndFields(json);
@@ -120,6 +118,7 @@ public class SessionManager extends Thread {
             return messageInvalid(con, invalidMsgStructureMsg);
         }
         String command = json.get("command").toString();
+
         // If the message is an INVALID_MESSAGE or LOGOUT message, close the connection.
         if (command.equals("INVALID_MESSAGE") || command.equals("LOGOUT") || command.equals("AUTHENTICATION_FAIL")) {
             con.closeCon();
@@ -133,7 +132,7 @@ public class SessionManager extends Thread {
          }
 
          // Process the message
-        return responder.process(MessageProcessor.toJson(msg, false, "status"), con);
+        return responder.process(json, con);
     }
 
     /**
@@ -180,6 +179,7 @@ public class SessionManager extends Thread {
                 log.info("received an interrupt, system is shutting down");
                 break;
             }
+            // System.out.println("    Server " + Settings.getLocalPort() + " has load: " + clientConnections.size());
             serverAnnounce();
         }
         log.info("closing " + connections.size() + " connections");
@@ -199,7 +199,8 @@ public class SessionManager extends Thread {
     public boolean messageInvalid(Connection c, String errorLog) {
         String msg = MessageProcessor.getInvalidMessage(errorLog);
         c.writeMsg(msg);
-        closeConnection(c);
+        String closeContext = "Close Connection Context: Received invalid message (in messageInvalid, in SessionManager)";
+        closeConnection(c, closeContext);
         return true;
     }
 
@@ -314,7 +315,8 @@ public class SessionManager extends Thread {
     public void serverAuthenticateFailed(Connection con, String secret) {
         String msg = MessageProcessor.getAuthenticationFailedMsg(secret);
         con.writeMsg(msg);
-        closeConnection(con);
+        String closeContext = "Close Connection Context: Authenticate Failed (in serverAuthenticateFailed, in SessionManager)";
+        closeConnection(con, closeContext);
     }
 
     public void serverAuthenticateSuccess(Connection con) {
@@ -330,9 +332,22 @@ public class SessionManager extends Thread {
     //
 
     /** Checks if a client is logged in. Returns true if logged in, false otherwise.
-     * @param c The connection we are checking **/
+     * @param c The connection we are checking
+     * @returns true if the connection belongs to a client logged into this server, false otherwise.
+     */
     public boolean checkClientLoggedIn(Connection c) {
         return clientConnections.containsKey(c);
+    }
+
+
+    /** Checks if a client is logged in. Returns true if logged in, false otherwise.
+     * @param user The username of the client we are checking
+     * @param secret The secret of the client we are checking
+     * @returns true if the connection belongs to a client logged into this server, false otherwise.
+     */
+    public boolean clientLoggedInLocally(String user, String secret) {
+        Connection con = getConnectionForClient(user, secret);
+        return checkClientLoggedIn(con);
     }
 
     /**
@@ -343,7 +358,8 @@ public class SessionManager extends Thread {
     public void clientLoginFailed(Connection con, String failureMessage) {
         String msg = MessageProcessor.getClientLoginFailedMsg(failureMessage);
         con.writeMsg(msg);
-        closeConnection(con);
+        String closeContext = "Close Connection Context: Client failed to login (in clientLoginFailed, in SessionManager)";
+        closeConnection(con, closeContext);
     }
 
     /** Log in a client that is not anonymous, by checking username and password combination match that
@@ -351,8 +367,8 @@ public class SessionManager extends Thread {
      * array.
      * @param c The connection a client is using
      * @param username The username supplied by the client
-     * @param password The password supplied by the client */
-    public void loginClient(Connection c, String username, String secret) {
+     * @param secret The password supplied by the client */
+    public Integer loginClient(Connection c, String username, String secret) {
 
         boolean logged_in = false;
         String failure_message = null;
@@ -362,11 +378,9 @@ public class SessionManager extends Thread {
 
             // Is the connected client still registering with this server?
             if (clientConnections.containsKey(c)) {
-                ConnectedClient client = clientConnections.get(c);
 
                 // Is the client registered?
-                if (client.isRegistered()) {
-                    client.setLoggedIn(true);
+                if (clientConnections.get(c).isRegistered()) {
                     logged_in = true;
                 }
                 // If not registered yet, client cannot yet log in!
@@ -374,6 +388,7 @@ public class SessionManager extends Thread {
                     failure_message = "Client registration ongoing, cannot yet log in";
                 }
             }
+            // Did they instead just connect to this server?
             else {
                 // Send login success message, add to client connections hashmap and remove from generic connections
                 // "holding" ArrayList
@@ -387,17 +402,19 @@ public class SessionManager extends Thread {
         }
         // Send login success message (Registered & Correct combo) & check for redirection
         if (logged_in) {
-            clientRegistry.logInUser(username, secret);
+            String loginContext = "Context: Received LOGIN, now in loginClient (in SessionManager)";
+            Integer token = clientRegistry.loginUser(username, secret, loginContext, -2);
             String msg = MessageProcessor.getLoginSuccessMsg(username);
-            log.error("about to call login success message\n");
             c.writeMsg(msg);
 
             // Check if client should be redirected to another server
-            checkRedirectClient(c, username);
+            checkRedirectClient(c, username, secret);
+            return token;
         }
         // username & secret either not stored locally or client registration is incomplete. Send login failed message.
         else {
             clientLoginFailed(c, failure_message);
+            return -2;
         }
     }
 
@@ -411,24 +428,29 @@ public class SessionManager extends Thread {
         connections.remove(c);
         String msg = MessageProcessor.getLoginSuccessMsg(username);
         c.writeMsg(msg);
+        if (!clientRegistry.secretCorrect(username, null)) {
+            clientRegistry.addFreshClient(username, null);
+        }
 
         // Check if there is another server client should connect to, and send getRedirectMsg message if so
-        checkRedirectClient(c, username);
+        checkRedirectClient(c, username, null);
     }
 
     /** Checks if the server knows of another server that has at least two less connections than it. If such a server
      * exists, sends a REDIRECT message with that server's hostname and port number.
      * This has been implemented to return the FIRST server that has two or less connections.
      * @param c The connection to send the message onn**/
-    public void checkRedirectClient(Connection c, String username) {
+    public void checkRedirectClient(Connection c, String username, String secret) {
 
         int load = clientConnections.size();
         for (ConnectedServer server : serverInfo.values()) {
             if (server.getLoad() <= load - 2) {
                 String msg = MessageProcessor.getRedirectMsg(server.getHostname(), server.getPort());
+                String loginContext = "Context: Redirecting, now in checkRedirect (in SessionManager)";
+                // clientRegistry.logoutUser(username, secret, loginContext);
                 log.info("about to call redirect message\n");
                 c.writeMsg(msg);
-                closeConnection(c);
+                closeConnection(c, "Close " + loginContext);
                 break;
             }
         }
@@ -499,7 +521,8 @@ public class SessionManager extends Thread {
         }
         String msg = MessageProcessor.getRegisterFailedMsg(username);
         con.writeMsg(msg);
-        closeConnection(con);
+        String closeContext = "Close Connection Context: Registration Failed (in registrationFailed, in SessionManager)";
+        closeConnection(con, closeContext);
     }
 
     /**
@@ -584,9 +607,9 @@ public class SessionManager extends Thread {
 
     /** Initiate closure of a given connection and remove from the appropriate array
      * @param c The connection to be closed  **/
-    public void closeConnection(Connection c) {
+    public void closeConnection(Connection c, String closeConnectionContext) {
         c.closeCon();
-        deleteClosedConnection(c);
+        deleteClosedConnection(c, closeConnectionContext);
     }
 
     /**
@@ -594,7 +617,7 @@ public class SessionManager extends Thread {
      * Removes the connection from the appropriate data structure, depending on who the connection is with.
      * @param con The connection to be closed
      */
-    public synchronized void deleteClosedConnection(Connection con) {
+    public synchronized void deleteClosedConnection(Connection con, String closeConnectionContext) {
 
         if (serverConnections.contains(con)) {
             // Close connection to another server
@@ -605,9 +628,10 @@ public class SessionManager extends Thread {
             String username = client.getUsername();
             String secret = client.getSecret();
 
-            // TODO: Test this
+            // Logout normal users, but never logout anonymous users (to allow for multiple anonymous users)
             if (!username.equals("anonymous")){
-                clientRegistry.logOutUser(username, secret);
+                String loginContext = "Context: in deleteClosedConnection (in SessionManager);" + closeConnectionContext;
+                clientRegistry.logoutUser(username, secret, loginContext, -2);
             }
 
             // Close connection to another client
@@ -655,7 +679,7 @@ public class SessionManager extends Thread {
         clientConnections.forEach((con, client) -> {
             String conUsername = client.getUsername();
             String conSecret = client.getSecret();
-            if (receivingUsers.containsKey(conUsername) & receivingUsers.get(conUsername).equals(conSecret)) {
+            if (receivingUsers.containsKey(conUsername) && receivingUsers.get(conUsername).equals(conSecret)) {
                 connectedClients.put(conUsername, con);
             }
         });

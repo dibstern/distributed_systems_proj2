@@ -132,6 +132,8 @@ public class ClientConnection implements Runnable  {
         catch (IOException e) {
             log.error("disconnected from " + Settings.socketAddress(socket) + " closed with exception: " + e);
             disconnect();
+
+            // Close GUI here?
         }
         open = false;
     }

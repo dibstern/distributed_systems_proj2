@@ -34,11 +34,13 @@ public class Responder {
         static {
             final Map<String, ServerCommand> responses = new HashMap<>();
 
-            // FROM CLIENT
+            // ------------------------- FROM CLIENT -------------------------
             /* Login message received. Has already been checked message is valid and client logged in. */
             responses.put("LOGIN", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
+
+                    SessionManager sessionManager = SessionManager.getInstance();
 
                     // TODO: Register Login status with ClientRegistry
 
@@ -51,7 +53,10 @@ public class Responder {
                     else {
                         // Client logging in with username - check secret and username matches what is stored
                         String secret = (String) json.get("secret");
-                        SessionManager.getInstance().loginClient(con, username, secret);
+                        Integer token = sessionManager.loginClient(con, username, secret);
+                        if (token != -2) {
+                            sessionManager.serverBroadcast(MessageProcessor.getLoginBroadcast(username, secret, token));
+                        }
                     }
                 }
             });
@@ -63,7 +68,8 @@ public class Responder {
                 @Override
                 public void execute(JSONObject json, Connection con) {
                     SessionManager sessionManager = SessionManager.getInstance();
-                    sessionManager.closeConnection(con);
+                    String closeConnectionContext = "Close Connection Context: Received LOGOUT (in Responder)";
+                    sessionManager.closeConnection(con, closeConnectionContext);
                 }
             });
             /* An activity message has been received from a client, and already checked to ensure it is valid, the client
@@ -84,6 +90,7 @@ public class Responder {
 
                     // Retrieve the logged in users (known to the clientRegistry at this time)
                     ArrayList<String> loggedInUsers = clientRegistry.getLoggedInUsers();
+                    loggedInUsers.remove(user);     // Remove the sender
 
                     // Add message and its expected recipients to ClientRegistry and retrieve the allocated token
                     Integer msgToken = clientRegistry.addClientMsgToRegistry(user, clientMessage, loggedInUsers);
@@ -107,8 +114,7 @@ public class Responder {
                     }
 
                     // Send back an ACTIVITY_MESSAGE to the sender, so it can display it on its GUI
-                    String processedActivityMsg = MessageProcessor.getActivityMessage(clientMessage);
-                    con.writeMsg(processedActivityMsg);
+                    con.writeMsg(clientMessage.toString());
                 }
             });
             /* Register message received by server from a client. Client wants to register username and password with
@@ -135,17 +141,18 @@ public class Responder {
                 }
             });
 
-            // FROM CLIENT & SERVER
+            // ------------------------- FROM CLIENT & SERVER -------------------------
             /* Invalid Message received from Client OR Server. Do not bother checking if the structure of the
              * INVALID_MESSAGE is itself valid, given the connection will be closed either way. **/
             responses.put("INVALID_MESSAGE", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
-                    SessionManager.getInstance().closeConnection(con);
+                    String closeConnectionContext = "Close Connection Context: Received INVALID_MESSAGE (in Responder)";
+                    SessionManager.getInstance().closeConnection(con, closeConnectionContext);
                 }
             });
 
-            // FROM SERVER
+            // ------------------------- FROM SERVER -------------------------
             /* Server has received an authenticate message from another server. Authenticate the server.
              * This is the one server message we do not check that sending server is authenticated first. **/
             responses.put("AUTHENTICATE", new ServerCommand() {
@@ -164,8 +171,6 @@ public class Responder {
                     SessionManager.getInstance().getClientRegistry().updateRecords(registry);
                 }
             });
-
-
             /* Received an activity broadcast message from a server. Forward message on to all other connections, except
              * to the sending server. **/
             responses.put("ACTIVITY_BROADCAST", new ServerCommand() {
@@ -195,7 +200,7 @@ public class Responder {
                     }
                 }
             });
-            /* ... **/
+            /* ... */
             responses.put("MSG_ACKS", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
@@ -203,32 +208,38 @@ public class Responder {
                     JSONObject messageAcks = (JSONObject) json.get("messages");
 
                     // Parse the JSON to create a HashMap of Message ACKs and register them in the ClientRegistry
-                    HashMap<Integer, ArrayList<String>> ackMap = MessageProcessor.acksToHashmap(messageAcks);
+                    HashMap<Integer, ArrayList<String>> ackMap = MessageProcessor.acksToHashMap(messageAcks);
                     if (ackMap != null) {
                         SessionManager.getInstance().getClientRegistry().registerAcks(ackMap, sender);
                     }
-
                 }
             });
-
-            /* ... **/
+            /* ... */
             responses.put("LOGIN_BROADCAST", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
+                    String user = json.get("username").toString();
+                    String secret = json.get("secret").toString();
 
-                    // TODO: Parse & Update Messages in ClientRegistry
+                    Integer loginRequestToken = ((Long) json.get("token")).intValue();
+                    String loginContext = "Context: receiving LOGIN_BROADCAST (in Responder)";
+
+                    ClientRegistry clientRegistry = SessionManager.getInstance().getClientRegistry();
+                    clientRegistry.loginUser(user, secret, loginContext, loginRequestToken);
                 }
             });
-
-            /* ... **/
+            /* ... */
             responses.put("LOGOUT_BROADCAST", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
-                    // TODO: Parse & Update Messages in ClientRegistry
+                    String user = json.get("username").toString();
+                    String secret = json.get("secret").toString();
+                    String loginContext = "Context: Receiving LOGOUT_BROADCAST (in Responder)";
+                    Integer token = ((Long) json.get("token")).intValue();
+                    ClientRegistry clientRegistry = SessionManager.getInstance().getClientRegistry();
+                    clientRegistry.loginUser(user, secret, loginContext, token);
                 }
             });
-
-
             /* Server announce message received from another server. Update information about this server, then forward
              * message on to all server connections. **/
             responses.put("SERVER_ANNOUNCE", new ServerCommand() {

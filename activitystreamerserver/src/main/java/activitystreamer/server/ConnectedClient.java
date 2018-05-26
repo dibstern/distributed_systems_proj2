@@ -7,7 +7,6 @@ public class ConnectedClient {
     private String secret;
     private int lockRequestServerCount;
     private boolean registered;
-    private boolean loggedIn;
 
     /** Stores basic information about a particular client
      * @param username The client's username
@@ -16,7 +15,6 @@ public class ConnectedClient {
         this.username = username;
         this.secret = password;
         this.registered = true;
-        this.loggedIn = true;
     }
 
     /** Stores basic information about a particular client
@@ -33,7 +31,6 @@ public class ConnectedClient {
         else {
             this.registered = false;
         }
-        this.loggedIn = false;
     }
 
     /** Increments the number of LOCK_ALLOWED messages received */
@@ -71,10 +68,4 @@ public class ConnectedClient {
     public boolean isRegistered() {
         return this.registered;
     }
-
-    public void setLoggedIn(boolean loggedIn) {
-        this.loggedIn = loggedIn;
-    }
-
-
 }
