@@ -70,10 +70,7 @@ public class Message implements Comparable<Message> {
      */
     public boolean receivedMessage(String user) {
         this.recipients.remove(user);
-        if (this.recipients.size() == 0) {
-            return true;
-        }
-        return false;
+        return this.recipients.isEmpty();
     }
 
     public JSONObject getClientMessage() {
@@ -88,6 +85,12 @@ public class Message implements Comparable<Message> {
         return this.recipients;
     }
 
+    public boolean updateRecipients(ArrayList<String> receivedRecipients) {
+        this.recipients.removeIf(m -> !receivedRecipients.contains(m));
+        return this.recipients.isEmpty();
+    }
+
+
     // ------------------------------ COMPARING MESSAGES ------------------------------
     public Integer getToken() {
         return this.token;
@@ -97,6 +100,35 @@ public class Message implements Comparable<Message> {
     public int compareTo(Message anotherMessage) {
         return anotherMessage.getToken().compareTo(this.token);
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (!Message.class.isAssignableFrom(obj.getClass())) {
+            return false;
+        }
+        final Message other = (Message) obj;
+        if ((this.token == null) ? (other.token != null) : !this.token.equals(other.token)) {
+            return false;
+        }
+        // Used if we implement a sender field
+        // if (!this.sender.equals(other.sender)) {
+        //     return false;
+        // }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 3;
+        hash = 53 * hash + (this.token != null ? this.token.hashCode() : 0);
+        // Used if we implement a sender field
+        // hash = 53 * hash + this.sender;
+        return hash;
+    }
+
 
     // ------------------------------ UNUSED METHODS ------------------------------
     public JSONObject getServerMessage() {

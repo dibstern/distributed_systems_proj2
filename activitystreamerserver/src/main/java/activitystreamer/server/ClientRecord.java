@@ -8,6 +8,7 @@ import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Collections;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ClientRecord {
 
@@ -37,7 +38,6 @@ public class ClientRecord {
         this.next_token = ((Long) clientRecordJson.get("next_token")).intValue();
         this.received_up_to = ((Long) clientRecordJson.get("received_up_to")).intValue();
 
-        // TODO: Check that this works!!
         Type collectionType = new TypeToken<ArrayList<Message>>(){}.getType();
         this.messages = MessageProcessor.getGson().fromJson(
                 ((JSONArray) clientRecordJson.get("messages")).toJSONString(),
@@ -48,27 +48,91 @@ public class ClientRecord {
     }
 
     /**
-     *
-     * @param registryObject
+     * Synchronise this record, updating its values if the received record contains updated information.
+     * @param receivedRecord
      */
-    public void updateRecord(JSONObject registryObject) {
+    public void updateRecord(JSONObject receivedRecord) {
 
         // Update Logged In Status
-        updateLoggedIn(((Long) registryObject.get("logged_in")).intValue(), "Updating Record");
-        updateReceivedUpTo(((Long) registryObject.get("received_up_to")).intValue());
+        updateLoggedIn(((Long) receivedRecord.get("logged_in")).intValue(), "Updating Record");
+        updateReceivedUpTo(((Long) receivedRecord.get("received_up_to")).intValue());
+
+        // Update next_token!!
+        updateNextToken(((Long) receivedRecord.get("next_token")).intValue());
 
         // Update Messages
-        // TODO: Add missing messages here
-        // TODO: Add undeliverable_messages
+        Type collectionType = new TypeToken<ArrayList<Message>>(){}.getType();
+        ArrayList<Message> receivedMessages = MessageProcessor.getGson().fromJson(
+                ((JSONArray) receivedRecord.get("messages")).toJSONString(),
+                collectionType);
+        updateMessages(receivedMessages);
+    }
+
+    private void updateMessages(ArrayList<Message> receivedMessages) {
+
+        receivedMessages.forEach((msg) -> {
+            boolean messageFound;
+
+            // Attempt to update deliverable messages if it's deliverable
+            if (msg.getToken() <= this.received_up_to) {
+                messageFound = updateDeliverableMessages(msg);
+            }
+            // Otherwise attempt to update undeliverable messages
+            else {
+                messageFound = updateUndeliverableMessages(msg);
+            }
+            // If we haven't found the message in our records, it's a new message we haven't yet received. Add it!
+            if (!messageFound) {
+                addMessage(msg);
+            }
+        });
+    }
+
+    private boolean updateDeliverableMessages(Message m) {
+        AtomicBoolean messageFound = new AtomicBoolean(false);
+        this.messages.forEach((message) -> {
+            if (message.equals(m)) {
+                messageFound.set(true);
+                boolean allDelivered = message.updateRecipients(m.getRemainingRecipients());
+                if (allDelivered) {
+                    messages.remove(message);
+                }
+            }
+        });
+        return messageFound.get();
+    }
+
+    private boolean updateUndeliverableMessages(Message m) {
+        AtomicBoolean messageFound = new AtomicBoolean(false);
+        this.undeliverable_messages.forEach((message) -> {
+            if (message.equals(m)) {
+                messageFound.set(true);
+                boolean allDelivered = message.updateRecipients(m.getRemainingRecipients());
+                if (allDelivered) {
+                    this.undeliverable_messages.remove(message);
+                }
+            }
+        });
+        return messageFound.get();
+    }
+
+    private void updateNextToken(Integer receivedNextToken) {
+        if (receivedNextToken.equals(Integer.MAX_VALUE) || receivedNextToken < 1) {
+            next_token = 1;
+        }
+        else if (next_token < receivedNextToken) {
+            next_token = receivedNextToken;
+        }
     }
 
     private void updateReceivedUpTo(Integer latestReceivedUpTo) {
-        if (this.received_up_to < latestReceivedUpTo) {
+
+        if (latestReceivedUpTo.equals(Integer.MAX_VALUE) || latestReceivedUpTo < 0) {
+            this.received_up_to = 1;
+        }
+        else if (this.received_up_to < latestReceivedUpTo) {
             this.received_up_to = latestReceivedUpTo;
         }
-        // TODO: Delete the associated cleared message, if it exists?
-        // TODO: Do we want to do this, or just rely on receivedMessage?
-        // Would be simply: deleteMessage(lastMessageCleared);
     }
 
     // ------------------------------ LOGIN MANAGEMENT ------------------------------
