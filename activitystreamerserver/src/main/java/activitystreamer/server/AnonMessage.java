@@ -17,15 +17,6 @@ public class AnonMessage implements Comparable<AnonMessage> {
         this.numAnonClientsToReceive = (int) jsonMessage.get("num_anon");
     }
 
-    // TODO CHECK THIS OKAY FIELDS
-    public JSONObject serverToAnonJson(JSONObject serverJsonMessage) {
-        JSONObject anonJsonMsg = new JSONObject();
-        anonJsonMsg.put("command", serverJsonMessage.get("command"));
-        anonJsonMsg.put("activity", serverJsonMessage.get("activity"));
-        anonJsonMsg.put("username", serverJsonMessage.get("username"));
-        return anonJsonMsg;
-    }
-
     public int getNumAnonClientsToReceive() {
         return numAnonClientsToReceive;
     }

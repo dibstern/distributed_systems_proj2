@@ -525,12 +525,19 @@ public class MessageProcessor {
         return clientJsonMsg;
     }
 
-
     public static JSONObject cleanClientMessage(JSONObject json) {
         JSONObject cleanedMessage = new JSONObject();
         cleanedMessage.put("activity", json.get("activity"));
         cleanedMessage.put("command", json.get("command"));
         return cleanedMessage;
+    }
+
+    public static JSONObject serverMsgToAnonMsg(JSONObject serverJsonMessage) {
+        JSONObject anonJsonMsg = new JSONObject();
+        anonJsonMsg.put("command", serverJsonMessage.get("command"));
+        anonJsonMsg.put("activity", serverJsonMessage.get("activity"));
+        anonJsonMsg.put("username", serverJsonMessage.get("username"));
+        return anonJsonMsg;
     }
 
 }
