@@ -28,6 +28,7 @@ public class SessionManager extends Thread {
     private static String serverId;
     private static Responder responder;
     private static ClientRegistry clientRegistry;
+    private final static int REDIRECT_DELAY = 2000; // milliseconds (= 2 seconds)
 
     protected static SessionManager sessionManager = null;
 
@@ -199,7 +200,12 @@ public class SessionManager extends Thread {
     public boolean messageInvalid(Connection c, String errorLog) {
         String msg = MessageProcessor.getInvalidMessage(errorLog);
         c.writeMsg(msg);
-        String closeContext = "Close Connection Context: Received invalid message (in messageInvalid, in SessionManager)";
+        String closeContext = "Close Connection Context: Received invalid message (in messageInvalid, in SessionMangr)";
+        if (clientConnections.containsKey(c)) {
+            String loginContext = closeContext + ". Logout Context: Received an invalid message from " +
+                    getConnectedClient(c).getUsername() + ".";
+            logoutClient(c, loginContext);
+        }
         closeConnection(c, closeContext);
         return true;
     }
@@ -390,7 +396,7 @@ public class SessionManager extends Thread {
             }
             // Did they instead just connect to this server?
             else {
-                // Send login success message, add to client connections hashmap and remove from generic connections
+                // Send login success message, add to client connections HashMap & remove from generic connections
                 // "holding" ArrayList
                 clientConnections.put(c, new ConnectedClient(username, secret));
                 connections.remove(c);
@@ -403,18 +409,15 @@ public class SessionManager extends Thread {
         // Send login success message (Registered & Correct combo) & check for redirection
         if (logged_in) {
             String loginContext = "Context: Received LOGIN, now in loginClient (in SessionManager)";
-            Integer token = clientRegistry.loginUser(username, secret, loginContext, -2);
+            Integer token = clientRegistry.loginUser(username, secret, loginContext, Integer.MIN_VALUE);
             String msg = MessageProcessor.getLoginSuccessMsg(username);
             c.writeMsg(msg);
-
-            // Check if client should be redirected to another server
-            checkRedirectClient(c, username, secret);
             return token;
         }
         // username & secret either not stored locally or client registration is incomplete. Send login failed message.
         else {
             clientLoginFailed(c, failure_message);
-            return -2;
+            return Integer.MIN_VALUE;
         }
     }
 
@@ -441,18 +444,59 @@ public class SessionManager extends Thread {
      * This has been implemented to return the FIRST server that has two or less connections.
      * @param c The connection to send the message onn**/
     public void checkRedirectClient(Connection c, String username, String secret) {
+        Integer logoutToken;
+        String logoutBroadcastMsg;
+        String msg;
+        String logoutContext;
 
         int load = clientConnections.size();
+        boolean redirect = false;
+        boolean redirectFailed = true;
         for (ConnectedServer server : serverInfo.values()) {
             if (server.getLoad() <= load - 2) {
-                String msg = MessageProcessor.getRedirectMsg(server.getHostname(), server.getPort());
-                String loginContext = "Context: Redirecting, now in checkRedirect (in SessionManager)";
-                // clientRegistry.logoutUser(username, secret, loginContext);
-                log.info("about to call redirect message\n");
-                c.writeMsg(msg);
-                closeConnection(c, "Close " + loginContext);
-                break;
+                redirect = true;
+                msg = MessageProcessor.getRedirectMsg(server.getHostname(), server.getPort());
+                logoutContext = "Context: Redirecting, now in checkRedirect (in SessionManager)";
+
+                logoutToken = logoutClient(c, logoutContext);
+                if (!logoutToken.equals(Integer.MIN_VALUE)) {
+                    logoutBroadcastMsg = MessageProcessor.getLogoutBroadcast(username, secret, logoutToken);
+                    sessionManager.serverBroadcast(logoutBroadcastMsg);
+
+                    log.info("about to call redirect message, waiting 2 secs\n");
+                    delayDisconnect();
+
+                    // LOGOUT_BROADCAST should have been sent. Will now disconnect user and log them out.
+                    c.writeMsg(msg);
+                    closeConnection(c, "Close " + logoutContext);
+                    break;
+                }
+                else {
+                    log.debug("Failed Redirection; logoutClient failed. Trying with next server");
+                    redirectFailed = true;
+                }
             }
+        }
+        if (redirect && redirectFailed) {
+            log.debug("Completely Failed Redirection; logoutClient failed.");
+        }
+    }
+
+    public void delayDisconnect() {
+        delayDisconnect(REDIRECT_DELAY);
+    }
+
+
+    public void delayDisconnect(Integer delay) {
+        try {
+            Thread.sleep(delay);
+        }
+        catch (InterruptedException e) {
+            e.printStackTrace();
+            String errorMsg = "Error: Redirect Delay Interrupted (InterruptedException). " +
+                    "In checkRedirectClient in SessionManager.";
+            log.error(errorMsg);
+            System.exit(-1);
         }
     }
 
@@ -624,23 +668,34 @@ public class SessionManager extends Thread {
             serverConnections.remove(con);
         }
         else if (clientConnections.containsKey(con)) {
-            ConnectedClient client = clientConnections.get(con);
-            String username = client.getUsername();
-            String secret = client.getSecret();
-
-            // Logout normal users, but never logout anonymous users (to allow for multiple anonymous users)
-            if (!username.equals("anonymous")){
-                String loginContext = "Context: in deleteClosedConnection (in SessionManager);" + closeConnectionContext;
-                clientRegistry.logoutUser(username, secret, loginContext, -2);
-            }
-
             // Close connection to another client
             clientConnections.remove(con);
+
+            // TODO: Logout Anonymous Clients (Not here?)
         }
         else {
             // Closing the connection to an unauthenticated server/client not logged in
             connections.remove(con);
         }
+    }
+
+    public Integer logoutClient(Connection con, String logoutContext) {
+        if (conIsClient(con)) {
+            ConnectedClient client = getConnectedClient(con);
+            String username = client.getUsername();
+            String secret = client.getSecret();
+            return clientRegistry.logoutUser(username, secret, logoutContext, Integer.MIN_VALUE);
+        }
+        return Integer.MIN_VALUE;
+    }
+
+
+    public boolean conIsClient(Connection con) {
+        return clientConnections.containsKey(con);
+    }
+
+    public ConnectedClient getConnectedClient(Connection con) {
+        return clientConnections.get(con);
     }
 
 
@@ -685,4 +740,14 @@ public class SessionManager extends Thread {
         });
         return connectedClients;
     }
+
+    public static void logDebug(String msg) {
+        log.debug(msg);
+    }
+
+    public static void logInfo(String msg) {
+        log.info(msg);
+    }
+
+
 }

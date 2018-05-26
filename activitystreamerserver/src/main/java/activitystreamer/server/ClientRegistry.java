@@ -3,8 +3,6 @@ package activitystreamer.server;
 import activitystreamer.util.LoginException;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
-
-import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -44,7 +42,7 @@ public class ClientRegistry {
             String username = clientRecordJson.get("username").toString();
 
             // Update existing record
-            if (clientRecords.containsKey(username)) {
+            if (userExists(username)) {
                 ClientRecord oldClientRecord = clientRecords.get(username);
 
                 // Update if the record has the correct secret
@@ -109,6 +107,9 @@ public class ClientRegistry {
         int tokenSent = setLogin(user, loginContext, true, optionalToken);
         System.out.println("Trying to login: " + user + ". token: " + tokenSent);
         System.out.println("CONTEXT: " + loginContext);
+        if (tokenSent == Integer.MIN_VALUE) {
+            System.out.println("Invalid Login Attempt. Unsuccessful.");
+        }
         return tokenSent;
     }
 
@@ -116,8 +117,8 @@ public class ClientRegistry {
         int tokenSent = setLogin(user, loginContext, false, optionalToken);
         System.out.println("Trying to logout: " + user + ". token: " + tokenSent);
         System.out.println("CONTEXT: " + loginContext);
-        if (tokenSent != -4 && tokenSent != -2) {
-            SessionManager.getInstance().serverBroadcast(MessageProcessor.getLogoutBroadcast(user, secret, tokenSent));
+        if (tokenSent == Integer.MIN_VALUE) {
+            System.out.println("Invalid Logout Attempt. Unsuccessful.");
         }
         return tokenSent;
     }
@@ -125,16 +126,13 @@ public class ClientRegistry {
     // TODO: Get rid of Magic Numbers
     private Integer setLogin(String user, String loginContext, boolean login, Integer optionalToken) {
         int tokenUsed;
-        if (optionalToken != -2) {
+        if (optionalToken != Integer.MIN_VALUE) {
             tokenUsed = optionalToken;
         }
         else {
             tokenUsed = getLoginToken(user, login) + 1;
         }
         int validToken = getClientRecord(user).updateLoggedIn(tokenUsed, loginContext);
-        if (validToken == -4) {
-            return Integer.MIN_VALUE;
-        }
         return validToken;
     }
 
@@ -171,6 +169,9 @@ public class ClientRegistry {
                 loggedInUsers.add(username);
             }
         });
+
+        // TODO: Add Anonymous User (if one is logged in) here
+
         return loggedInUsers;
     }
 
@@ -191,10 +192,9 @@ public class ClientRegistry {
         HashMap<String, String> clientCredentials = new HashMap<String, String>();
 
         userList.forEach((user) -> {
-            if (clientRecords.containsKey(user)) {
-                String secret = clientRecords.get(user).getSecret();
-                clientCredentials.put(user, secret);
-            }
+            ClientRecord record = getClientRecord(user);
+            String secret = record.getSecret();
+            clientCredentials.put(user, secret);
         });
         return clientCredentials;
     }
@@ -203,15 +203,11 @@ public class ClientRegistry {
     // ------------------------------ MESSAGE HANDLING ------------------------------
 
     public Integer addClientMsgToRegistry(String sender, JSONObject activityMsg, ArrayList<String> loggedInUsers) {
-        return getClientRecord(sender).addMessage(activityMsg, loggedInUsers);
+        return getClientRecord(sender).createAndAddMessage(activityMsg, loggedInUsers);
     }
 
     public void addMessageToRegistry(Message msg, String user) {
         getClientRecord(user).addMessage(msg);
-    }
-
-    public Message getMessage(String sender, Integer token) {
-        return getClientRecord(sender).getMessage(token);
     }
 
     public void receivedMessage(String sender, ArrayList<String> receivers, Integer token) {
@@ -239,8 +235,11 @@ public class ClientRegistry {
                 Integer token = m.getToken();
                 con.writeMsg(activityBroadcastMsg.toString());
 
+                // Record the message as sent
+                m.receivedMessage(user);
+
                 // Add an ACK
-                if (acks.containsKey(token)) {
+                if (!acks.containsKey(token)) {
                     ArrayList<String> users = new ArrayList<String>();
                     users.add(user);
                     acks.put(token, users);
@@ -274,13 +273,18 @@ public class ClientRegistry {
 
         JSONObject theMessages = new JSONObject();
 
-        ClientRecord senderRecord = getClientRecord(sender);
+        // TODO: What if we receive a MSG_ACKS for a user we haven't yet registered?
+        if (!userExists(sender)) {
 
-        // Report the messages as having been sent
-        acks.forEach((token, recipients) -> {
-            senderRecord.receivedMessage(recipients, token);
-            theMessages.put(token, recipients);
-        });
+        }
+        else {
+            // Report the messages as having been sent
+            ClientRecord senderRecord = getClientRecord(sender);
+            acks.forEach((token, recipients) -> {
+                senderRecord.receivedMessage(recipients, token);
+                theMessages.put(token, recipients);
+            });
+        }
         return theMessages;
     }
 
@@ -293,7 +297,7 @@ public class ClientRegistry {
 
     private ClientRecord getClientRecord(String user) {
         if (!clientRecords.containsKey(user)) {
-            System.out.println("ERROR: - getClientRecord in clientRegistry - user: " + user +
+            SessionManager.getInstance().logDebug("ERROR: - getClientRecord in clientRegistry - user: " + user +
                     " not in clientRecords" + clientRecords);
             System.exit(1);
             return null;

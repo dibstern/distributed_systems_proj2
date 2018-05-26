@@ -14,36 +14,38 @@ public class ClientRecord {
     private String username;
     private String secret;
     private ArrayList<Message> messages;
+    private ArrayList<Message> undeliverable_messages;
     private Integer logged_in;
     private Integer next_token;
-    private Integer last_message_cleared;
+    private Integer received_up_to;
 
     public ClientRecord(String username, String secret) {
         this.username = username;
         this.secret = secret;
         this.logged_in = 1;
         this.next_token = 1;
-        this.last_message_cleared = 0;
+        this.received_up_to = 0;
         this.messages = new ArrayList<Message>();
     }
 
     public ClientRecord(JSONObject clientRecordJson) {
         this.username = clientRecordJson.get("username").toString();
-        if (!username.equals("anonymous"))
-        {
+        if (!username.equals("anonymous")) {
             this.secret = clientRecordJson.get("secret").toString();
         }
         this.logged_in = ((Long) clientRecordJson.get("logged_in")).intValue();
         this.next_token = ((Long) clientRecordJson.get("next_token")).intValue();
-        this.last_message_cleared = ((Long) clientRecordJson.get("last_message_cleared")).intValue();
+        this.received_up_to = ((Long) clientRecordJson.get("received_up_to")).intValue();
 
         // TODO: Check that this works!!
         Type collectionType = new TypeToken<ArrayList<Message>>(){}.getType();
         this.messages = MessageProcessor.getGson().fromJson(
                 ((JSONArray) clientRecordJson.get("messages")).toJSONString(),
                 collectionType);
+        this.undeliverable_messages = MessageProcessor.getGson().fromJson(
+                ((JSONArray) clientRecordJson.get("undeliverable_messages")).toJSONString(),
+                collectionType);
     }
-
 
     /**
      *
@@ -53,23 +55,23 @@ public class ClientRecord {
 
         // Update Logged In Status
         updateLoggedIn(((Long) registryObject.get("logged_in")).intValue(), "Updating Record");
+        updateReceivedUpTo(((Long) registryObject.get("received_up_to")).intValue());
 
-        updateLastMessageCleared(((Long) registryObject.get("last_message_cleared")).intValue());
         // Update Messages
-//        JSONObject expectedTokensJson = (JSONObject) registryObject.get("expected_tokens");
-//        ConcurrentHashMap<String, ArrayList<Integer>> receivedTokenMap = toTokenDeliveryMap(expectedTokensJson);
-//        updateTokens(receivedTokenMap);
+        // TODO: Add missing messages here
+        // TODO: Add undeliverable_messages
     }
 
-    private void updateLastMessageCleared(Integer lastMessageCleared) {
-        if (this.last_message_cleared < lastMessageCleared) {
-            this.last_message_cleared = lastMessageCleared;
+    private void updateReceivedUpTo(Integer latestReceivedUpTo) {
+        if (this.received_up_to < latestReceivedUpTo) {
+            this.received_up_to = latestReceivedUpTo;
         }
         // TODO: Delete the associated cleared message, if it exists?
         // TODO: Do we want to do this, or just rely on receivedMessage?
         // Would be simply: deleteMessage(lastMessageCleared);
     }
 
+    // ------------------------------ LOGIN MANAGEMENT ------------------------------
 
     /**
      * Checks whether or not the JSONObject representing a client record has the same secret as this ClientRecord
@@ -92,11 +94,6 @@ public class ClientRecord {
         return this.secret.equals(secret);
     }
 
-
-
-    /*
-     * Getters and Setters
-     */
     public String getUsername() {
         return this.username;
     }
@@ -110,7 +107,14 @@ public class ClientRecord {
      * @param newLoggedIn
      */
     public Integer updateLoggedIn(Integer newLoggedIn, String loginContext) {
-        if ((newLoggedIn > this.logged_in || this.logged_in == Integer.MAX_VALUE) && newLoggedIn > 0) {
+
+        if (this.logged_in == Integer.MAX_VALUE) {
+            this.logged_in = 2;
+            System.out.println("Logging In " + this.username);
+            System.out.println(loginContext + "; this.logged_in = " + this.logged_in);
+            return this.logged_in;
+        }
+        else if (newLoggedIn > this.logged_in && newLoggedIn > 0) {
             this.logged_in = newLoggedIn;
 
             if (this.logged_in % 2 == 0) {
@@ -123,40 +127,8 @@ public class ClientRecord {
 
             return this.logged_in;
         }
-        return -4;
-    }
-
-//    /**
-//     *
-//     * @param loginToken
-//     * @param loginContext
-//     * @return ...
-//     */
-//    public Integer setLoggedIn(Integer loginToken, String loginContext) {
-//
-//        if (loginToken > this.logged_in || this.logged_in == Integer.MAX_VALUE) {
-//            return incrementLoggedIn();
-//        }
-//        else {
-//            System.out.println("LOGIN CONTEXT --  " + loginContext);
-//            System.out.println("ERROR: Logging in, in setLoggedIn. Received token " + loginToken +
-//                               ", have " + this.logged_in);
-//            System.exit(1);
-//            return getLoggedInToken();
-//        }
-//    }
-
-    /**
-     *
-     */
-    public Integer incrementLoggedIn() {
-        if (this.logged_in == Integer.MAX_VALUE) {
-            this.logged_in = 2;
-        }
-        else {
-            this.logged_in += 1;
-        }
-        return this.logged_in;
+        // Invalid login attempt
+        return Integer.MIN_VALUE;
     }
 
     /**
@@ -178,32 +150,60 @@ public class ClientRecord {
         return token;
     }
 
+    // ------------------------------ MESSAGE CREATION ------------------------------
 
-    public Integer addMessage(JSONObject msg, ArrayList<String> recipients) {
+    public void createAndAddServerMessage(JSONObject msg, ArrayList<String> recipients, Integer token) {
+        Message message = new Message(token, msg, recipients);
+        addMessage(message);
+    }
+
+    public Integer createAndAddMessage(JSONObject msg, ArrayList<String> recipients) {
         Integer token = getNextTokenAndIncrement();
-        messages.add(new Message(token, msg, recipients));
-        Collections.sort(messages);
+        Message message = new Message(token, msg, recipients);
+        addMessage(message);
         return token;
     }
 
-    public void addServerMessage(JSONObject msg, ArrayList<String> recipients, Integer token) {
-        messages.add(new Message(token, msg, recipients));
-        Collections.sort(messages);
-    }
-
     public void addMessage(Message msg) {
-        messages.add(msg);
-        Collections.sort(messages);
+
+        Integer token = msg.getToken();
+        if (this.received_up_to + 1 == token) {
+            messages.add(msg);
+            Collections.sort(messages);
+            this.received_up_to = token;
+            updateDeliverableMessages();
+        }
+        else {
+            undeliverable_messages.add(msg);
+            Collections.sort(undeliverable_messages);
+        }
     }
 
-
-    public Message getMessage(Integer token) {
-        for (Message message : messages ) {
-            if (message.getToken().equals(token)) {
-                return message;
+    /**
+     * Check that we haven't already received messages with higher tokens -> update if we have
+     */
+    public void updateDeliverableMessages() {
+        ArrayList<Message> nextMessages = getMessagesWithTokensAbove(this.received_up_to);
+        for (Message m : nextMessages) {
+            if (m.getToken() == this.received_up_to + 1) {
+                this.received_up_to += 1;
+                undeliverable_messages.remove(m);
+                messages.add(m);
+            }
+            else {
+                break;
             }
         }
-        return null;
+    }
+
+    public ArrayList<Message> getMessagesWithTokensAbove(Integer largerThan) {
+        ArrayList<Message> returnMessages = new ArrayList<Message>();
+        for (Message m : messages) {
+            if (m.getToken() > largerThan) {
+                returnMessages.add(m);
+            }
+        }
+        return returnMessages;
     }
 
     public void receivedMessage(ArrayList<String> receivers, Integer token) {
@@ -218,22 +218,45 @@ public class ClientRecord {
         }
     }
 
-    public boolean containsMessage(Integer token) {
-        for (Message m : messages) {
-            if (m.getToken().equals(token)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private void deleteMessage(Integer token) {
         messages.removeIf(m -> m.getToken().equals(token));
-        if (this.last_message_cleared < token) {
-            this.last_message_cleared = token;
-        }
     }
 
+    /**
+     * Used to get the next valid message available for the recipient.
+     * @param recipient
+     * @return
+     */
+    public Message getNextMessage(String recipient) {
+
+        // Make sure the first message we iterate over is the first addressed to the recipient
+        Collections.sort(messages);
+        for (Message m : messages) {
+            if (m.addressedTo(recipient)) {
+                return m;
+            }
+        }
+        return null;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // ----------------------------------- Archived Methods (Unused but possibly useful in the future) ----------------
     /**
      * Returns a HashMap of <Username, Message> Pairs, the message to send to each user.
      * @param connectedClients A client currently connected to the server.
@@ -251,40 +274,6 @@ public class ClientRecord {
             }
         });
         return nextMessages;
-    }
-
-    /**
-     * Used to get the next valid message available for the recipient.
-     * @param recipient
-     * @return
-     */
-    public Message getNextMessage(String recipient) {
-
-        // Make sure the first message we iterate over is the first addressed to the recipient
-        Collections.sort(messages);
-        for (Message m : messages) {
-            if (m.addressedTo(recipient)) {
-                if (okayToSend(m.getToken())) {
-                    return m;
-                }
-                else {
-                    return null;
-                }
-            }
-        }
-        return null;
-    }
-
-    // public HashMap<Integer, ArrayList<String>> sen
-
-    private Integer getLastTokenCleared() {
-        return this.last_message_cleared;
-    }
-
-
-    public boolean okayToSend(Integer token) {
-        Integer lastCleared = getLastTokenCleared();
-        return (lastCleared.equals(token-1) || lastCleared > token || containsMessage(token-1) || token == 1);
     }
 
 }

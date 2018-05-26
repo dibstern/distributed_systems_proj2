@@ -54,9 +54,11 @@ public class Responder {
                         // Client logging in with username - check secret and username matches what is stored
                         String secret = (String) json.get("secret");
                         Integer token = sessionManager.loginClient(con, username, secret);
-                        if (token != -2) {
+                        if (!token.equals(Integer.MIN_VALUE)) {
                             sessionManager.serverBroadcast(MessageProcessor.getLoginBroadcast(username, secret, token));
                         }
+                        // Check if client should be redirected to another server
+                        sessionManager.checkRedirectClient(con, username, secret);
                     }
                 }
             });
@@ -69,6 +71,17 @@ public class Responder {
                 public void execute(JSONObject json, Connection con) {
                     SessionManager sessionManager = SessionManager.getInstance();
                     String closeConnectionContext = "Close Connection Context: Received LOGOUT (in Responder)";
+
+                    ClientRegistry clientRegistry = sessionManager.getClientRegistry();
+                    ConnectedClient client = sessionManager.getConnectedClient(con);
+                    String username = client.getUsername();
+                    String secret = client.getSecret();
+                    String logoutContext = "Context: received LOGOUT request from " + username;
+                    Integer token = clientRegistry.logoutUser(username, secret, logoutContext, Integer.MIN_VALUE);
+                    if (!token.equals(Integer.MIN_VALUE)) {
+                        String logoutBroadcastMsg = MessageProcessor.getLogoutBroadcast(username, secret, token);
+                        sessionManager.serverBroadcast(logoutBroadcastMsg);
+                    }
                     sessionManager.closeConnection(con, closeConnectionContext);
                 }
             });
@@ -148,7 +161,11 @@ public class Responder {
                 @Override
                 public void execute(JSONObject json, Connection con) {
                     String closeConnectionContext = "Close Connection Context: Received INVALID_MESSAGE (in Responder)";
-                    SessionManager.getInstance().closeConnection(con, closeConnectionContext);
+
+                    SessionManager sessionManager = SessionManager.getInstance();
+                    String logoutContext = closeConnectionContext + ". Logging out user that sent it.";
+                    sessionManager.logoutClient(con, logoutContext);
+                    sessionManager.closeConnection(con, closeConnectionContext);
                 }
             });
 
@@ -176,6 +193,8 @@ public class Responder {
             responses.put("ACTIVITY_BROADCAST", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
+
+                    System.out.println("Received ACTIVITY_BROADCAST: " + json.toString());
 
                     // Forward message onto all other servers
                     SessionManager sessionManager = SessionManager.getInstance();
@@ -236,8 +255,13 @@ public class Responder {
                     String secret = json.get("secret").toString();
                     String loginContext = "Context: Receiving LOGOUT_BROADCAST (in Responder)";
                     Integer token = ((Long) json.get("token")).intValue();
-                    ClientRegistry clientRegistry = SessionManager.getInstance().getClientRegistry();
-                    clientRegistry.loginUser(user, secret, loginContext, token);
+                    SessionManager sessionManager = SessionManager.getInstance();
+                    ClientRegistry clientRegistry = sessionManager.getClientRegistry();
+                    Integer logoutToken = clientRegistry.logoutUser(user, secret, loginContext, token);
+                    if (!logoutToken.equals(Integer.MIN_VALUE)) {
+                        sessionManager.forwardServerMsg(con, json.toString());
+                    }
+
                 }
             });
             /* Server announce message received from another server. Update information about this server, then forward

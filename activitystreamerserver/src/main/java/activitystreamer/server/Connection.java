@@ -27,7 +27,7 @@ public class Connection extends Thread {
     private boolean term = false;
 
     private static final boolean DEBUG = true;
-    private static final boolean PRINT_SERVER_STATUS = true;
+    private static final boolean PRINT_SERVER_STATUS = false;
 
     Connection(Socket socket) throws IOException {
 
@@ -71,6 +71,10 @@ public class Connection extends Thread {
                 log.info(messageAction + msg);
             }
         }
+        if (DEBUG) {
+            String messageAction = (sending ? "Sending: " : "Receiving: ");
+            log.info(messageAction + msg);
+        }
     }
 
 
@@ -105,6 +109,7 @@ public class Connection extends Thread {
             String data;
             while (!term && (data = inreader.readLine()) != null) {
                 term = SessionManager.getInstance().process(this, data);
+                // System.out.println("Processing: " + data);
                 printDebugMessages(data, false);
             }
             log.debug("connection closed to " + Settings.socketAddress(socket));

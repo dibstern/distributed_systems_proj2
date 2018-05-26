@@ -113,7 +113,7 @@ public class MessageProcessor {
                 return "username field is not a String";
             }
             else {
-                if (!((String) o).equals("anonymous")) {
+                if (!(o.toString()).equals("anonymous")) {
                     if (json.containsKey("secret")) {
                         o = json.get("secret");
                         if (!(o instanceof String)) {
@@ -177,14 +177,16 @@ public class MessageProcessor {
         }
 
         SessionManager sessionManager = SessionManager.getInstance();
+        ClientRegistry clientRegistry = sessionManager.getClientRegistry();
 
         // Check that the server is authenticated OR client logged in, depending on connection type
         boolean serverAuthenticated = sessionManager.checkServerAuthenticated(con);
         boolean clientLoggedIn = sessionManager.checkClientLoggedIn(con);
 
         // Check client has logged in, and if username is NOT anonymous, username and secret match that stored locally
-        boolean validClient = (clientLoggedIn && ((username != null && secret != null &&
-                sessionManager.getClientRegistry().secretCorrect(username, secret)) || username.equals("anonymous")));
+        boolean validClient = (clientLoggedIn &&
+                ((username != null && secret != null && clientRegistry.secretCorrect(username, secret)) ||
+                        (username != null && username.equals("anonymous"))));
 
         switch(command) {
 
@@ -254,7 +256,7 @@ public class MessageProcessor {
      * @param data The string, hopefully formatted as a JSON object, to be parsed.
      * @return A JSONObject containing the data included in the string, or a specific error response.
      */
-    public static JSONObject toJson(String data, boolean dataIsArray, String keyString) {
+    public synchronized static JSONObject toJson(String data, boolean dataIsArray, String keyString) {
 
         JSONObject json;
 
@@ -437,7 +439,8 @@ public class MessageProcessor {
 
     /** Creates an ACTIVITY_MESSAGE message to be sent across the network.
      * @param json The activity message
-     * @return Msg the message to be sent across the network*/
+     * @return Msg the message to be sent across the network
+     */
     public static String getActivityMessage(JSONObject json) {
         JSONObject msg = new JSONObject();
         msg.put("command", "ACTIVITY_MESSAGE");
@@ -462,6 +465,8 @@ public class MessageProcessor {
         msg.put("token", msgToken);
         JSONObject recipientsJson = toJson(getGson().toJson(loggedInUsers), true, "recipients");
         msg.putAll(recipientsJson);
+
+        System.out.println("MADE ACTIVITY_BROADCAST message: " + msg.toString());
         return msg.toString();
     }
 
@@ -476,10 +481,8 @@ public class MessageProcessor {
         // Create new processed message
         JSONObject processedMsg = new JSONObject();
         processedMsg.put("username", user);
-        if (!user.equals("anonymous"))
-        {
-            String secret = activityMsg.get("secret").toString();
-            processedMsg.put("secret", secret);
+        if (!user.equals("anonymous")) {
+            processedMsg.put("secret", activityMsg.get("secret").toString());
         }
         processedMsg.put("command", command);
         processedMsg.put("activity", activityMessage);
@@ -510,6 +513,16 @@ public class MessageProcessor {
         ackMessage.put("command", "MSG_ACKS");
         ackMessage.put("sender", sender);
         return ackMessage;
+    }
+
+    public static JSONObject serverToClientJson(JSONObject serverJsonMessage) {
+        JSONObject clientJsonMsg = new JSONObject();
+        clientJsonMsg.put("command", serverJsonMessage.get("command"));
+        clientJsonMsg.put("activity", serverJsonMessage.get("activity"));
+        clientJsonMsg.put("username", serverJsonMessage.get("username"));
+        clientJsonMsg.put("secret", serverJsonMessage.get("secret"));
+        clientJsonMsg.put("authenticated_user", serverJsonMessage.get("authenticated_user"));
+        return clientJsonMsg;
     }
 
 }
