@@ -113,6 +113,10 @@ public class Connection extends Thread {
                 printDebugMessages(data, false);
             }
             log.debug("connection closed to " + Settings.socketAddress(socket));
+
+            // Ensure the user is recorded as being logged out in the ClientRegistry
+            SessionManager.getInstance().ensureLogoutDisconnectedClient(this);
+
             String closeContext = "Close Connection Context: connection closed naturally (in run, in Connection)";
             SessionManager.getInstance().deleteClosedConnection(this, closeContext);
             in.close();
