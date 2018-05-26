@@ -11,8 +11,7 @@ public class AnonMessage implements Comparable<AnonMessage> {
     private JSONObject msg;
     private int numAnonClientsToReceive;
 
-    public AnonMessage(JSONObject jsonMessage)
-    {
+    public AnonMessage(JSONObject jsonMessage) {
         this.messageToken = ((Long) jsonMessage.get("token")).intValue();
         this.msg = serverToAnonJson(jsonMessage);
         this.numAnonClientsToReceive = (int) jsonMessage.get("num_anon");
@@ -27,16 +26,13 @@ public class AnonMessage implements Comparable<AnonMessage> {
         return anonJsonMsg;
     }
 
-    public int getNumAnonClientsToReceive()
-    {
+    public int getNumAnonClientsToReceive() {
         return numAnonClientsToReceive;
     }
 
-    public boolean decrementNumAnonClientsToReceive()
-    {
+    public boolean decrementNumAnonClientsToReceive() {
         numAnonClientsToReceive--;
-        if (numAnonClientsToReceive == 0)
-        {
+        if (numAnonClientsToReceive == 0) {
             // Correct number of anon clients have received message, can be deleted
             return true;
         }

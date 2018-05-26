@@ -21,49 +21,40 @@ public class AnonClientRegistry {
         messages = new ArrayList<AnonMessage>();
     }
 
-    public void addAnonMessage(AnonMessage msg)
-    {
+    public void addAnonMessage(AnonMessage msg) {
      messages.add(msg);
      Collections.sort(messages);
     }
 
     // TODO THIS WILL BE CALLED WHEN DECREMENTING NUMBER OF ANON CLIENTS TO RECEIVE MESSAGE EQUALS ZERO
-    private void removeAnonMessage(AnonMessage msg)
-    {
+    private void removeAnonMessage(AnonMessage msg) {
         messages.remove(msg);
         Collections.sort(messages);
     }
 
-    public int getNumAnonUsersOnNetwork()
-    {
+    public int getNumAnonUsersOnNetwork() {
         return numAnonUsersOnNetwork;
     }
 
-    public boolean checkAnonLoggedOn()
-    {
+    public boolean checkAnonLoggedOn() {
         return anonLoggedOn;
     }
 
-    public void incrementNumAnonClients()
-    {
-        if (numAnonUsersOnNetwork == 0)
-        {
+    public void incrementNumAnonClients() {
+        if (numAnonUsersOnNetwork == 0) {
             setLoggedStatus(true);
         }
         numAnonUsersOnNetwork++;
     }
 
-    public void decrementNumAnonClients()
-    {
-        if (numAnonUsersOnNetwork == 1)
-        {
+    public void decrementNumAnonClients() {
+        if (numAnonUsersOnNetwork == 1) {
             setLoggedStatus(false);
         }
         numAnonUsersOnNetwork--;
     }
 
-    private void setLoggedStatus(boolean var)
-    {
+    private void setLoggedStatus(boolean var) {
         anonLoggedOn = var;
     }
 
