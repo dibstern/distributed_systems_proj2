@@ -133,7 +133,7 @@ public class ClientRegistry {
         }
         int validToken = getClientRecord(user).updateLoggedIn(tokenUsed, loginContext);
         if (validToken == -4) {
-            return null;
+            return Integer.MIN_VALUE;
         }
         return validToken;
     }
