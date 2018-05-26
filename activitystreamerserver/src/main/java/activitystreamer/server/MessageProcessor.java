@@ -497,7 +497,7 @@ public class MessageProcessor {
         // Add each list of tokens and receivers to the HashMap
         msgAcksJson.forEach((tokenObj, receivedListObj) -> {
             ArrayList<String> msgs = new ArrayList<String>();
-            Integer token = ((Long) tokenObj).intValue();
+            Integer token = Integer.parseInt(tokenObj.toString());
             JSONArray receivedList = (JSONArray) receivedListObj;
             receivedList.forEach((receiver) -> msgs.add(receiver.toString()));
             ackMap.put(token, msgs);
