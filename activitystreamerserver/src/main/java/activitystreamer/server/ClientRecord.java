@@ -29,7 +29,10 @@ public class ClientRecord {
 
     public ClientRecord(JSONObject clientRecordJson) {
         this.username = clientRecordJson.get("username").toString();
-        this.secret = clientRecordJson.get("secret").toString();
+        if (!username.equals("anonymous"))
+        {
+            this.secret = clientRecordJson.get("secret").toString();
+        }
         this.logged_in = ((Long) clientRecordJson.get("logged_in")).intValue();
         this.next_token = ((Long) clientRecordJson.get("next_token")).intValue();
         this.last_message_cleared = ((Long) clientRecordJson.get("last_message_cleared")).intValue();
