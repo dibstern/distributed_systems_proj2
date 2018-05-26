@@ -14,7 +14,7 @@ public class Message implements Comparable<Message> {
     // ------------------------------ OBJECT CREATION ------------------------------
     public Message(Integer token, JSONObject clientMessage, ArrayList<String> recipients) {
         this.token = token;
-        this.clientMessage = clientMessage;
+        this.clientMessage = MessageProcessor.cleanClientMessage(clientMessage);
         this.recipients = new ArrayList<String>(recipients);
 
         // Provided client version of the message -> Create server message
@@ -33,7 +33,7 @@ public class Message implements Comparable<Message> {
         this.serverMessage = jsonMessage;
 
         // Provided server version of the message -> Create client message
-        this.clientMessage = MessageProcessor.serverToClientJson(jsonMessage);
+        this.clientMessage = MessageProcessor.cleanClientMessage(MessageProcessor.serverToClientJson(jsonMessage));
     }
 
     public ArrayList<String> toRecipientsArrayList(Object recipientsObj) {

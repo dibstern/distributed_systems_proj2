@@ -525,4 +525,12 @@ public class MessageProcessor {
         return clientJsonMsg;
     }
 
+
+    public static JSONObject cleanClientMessage(JSONObject json) {
+        JSONObject cleanedMessage = new JSONObject();
+        cleanedMessage.put("activity", json.get("activity"));
+        cleanedMessage.put("command", json.get("command"));
+        return cleanedMessage;
+    }
+
 }
