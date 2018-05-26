@@ -26,36 +26,55 @@ public class AnonClientRegistry {
      Collections.sort(messages);
     }
 
-    // TODO THIS WILL BE CALLED WHEN DECREMENTING NUMBER OF ANON CLIENTS TO RECEIVE MESSAGE EQUALS ZERO
-    private void removeAnonMessage(AnonMessage msg) {
-        messages.remove(msg);
-        Collections.sort(messages);
-    }
-
     public int getNumAnonUsersOnNetwork() {
         return numAnonUsersOnNetwork;
     }
 
-    public boolean checkAnonLoggedOn() {
+    public boolean anonsLoggedOn() {
         return anonLoggedOn;
     }
 
-    public void incrementNumAnonClients() {
-        if (numAnonUsersOnNetwork == 0) {
+    public void anonLogin() {
+        this.numAnonUsersOnNetwork++;
+        if (numAnonUsersOnNetwork > 0) {
             setLoggedStatus(true);
         }
-        numAnonUsersOnNetwork++;
     }
 
-    public void decrementNumAnonClients() {
-        if (numAnonUsersOnNetwork == 1) {
+    public void anonLogout() {
+        this.numAnonUsersOnNetwork--;
+        if (numAnonUsersOnNetwork == 0) {
             setLoggedStatus(false);
         }
-        numAnonUsersOnNetwork--;
     }
 
     private void setLoggedStatus(boolean var) {
         anonLoggedOn = var;
+    }
+
+    public void wasReceived(AnonMessage m) {
+        boolean allDelivered = m.wasReceived();
+        if (allDelivered) {
+            messages.remove(m);
+        }
+    }
+
+    public void wasReceived(AnonMessage m, Integer numUsers) {
+        boolean allDelivered = m.wasReceived(numUsers);
+        if (allDelivered) {
+            messages.remove(m);
+        }
+    }
+
+    public AnonMessage getNextMessage() {
+        if (!messages.isEmpty()) {
+            return messages.get(0);
+        }
+        return null;
+    }
+
+    public void flushMessages(Connection con) {
+        //
     }
 
 }

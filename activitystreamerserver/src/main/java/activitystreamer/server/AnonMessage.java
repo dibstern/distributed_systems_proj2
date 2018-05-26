@@ -7,13 +7,13 @@ import org.json.simple.JSONObject;
  */
 public class AnonMessage implements Comparable<AnonMessage> {
 
-    private Integer messageToken;
+    private Integer token;
     private JSONObject msg;
     private int numAnonClientsToReceive;
 
     public AnonMessage(JSONObject jsonMessage) {
-        this.messageToken = ((Long) jsonMessage.get("token")).intValue();
-        this.msg = serverToAnonJson(jsonMessage);
+        this.token = ((Long) jsonMessage.get("token")).intValue();
+        this.msg = MessageProcessor.serverMsgToAnonMsg(jsonMessage);
         this.numAnonClientsToReceive = (int) jsonMessage.get("num_anon");
     }
 
@@ -30,18 +30,27 @@ public class AnonMessage implements Comparable<AnonMessage> {
         return numAnonClientsToReceive;
     }
 
-    public boolean decrementNumAnonClientsToReceive() {
+    public boolean wasReceived(Integer numAnonClients) {
+        this.numAnonClientsToReceive -= numAnonClients;
+        return (numAnonClientsToReceive <= 0);
+    }
+
+
+    public boolean wasReceived() {
+
         numAnonClientsToReceive--;
-        if (numAnonClientsToReceive == 0) {
-            // Correct number of anon clients have received message, can be deleted
-            return true;
-        }
-        return false;
+
+        // Correct number of anon clients have received message, can be deleted
+        return (numAnonClientsToReceive == 0);
+    }
+
+    public JSONObject getMessage() {
+        return msg;
     }
 
     // ------------------ COMPARING MESSAGES ------------------
     public Integer getToken() {
-        return this.messageToken;
+        return this.token;
     }
 
     @Override
