@@ -46,6 +46,30 @@ public class AnonMessage implements Comparable<AnonMessage> {
 
     @Override
     public int compareTo(AnonMessage anotherMessage) {
-        return anotherMessage.getToken().compareTo(this.messageToken);
+        return anotherMessage.getToken().compareTo(this.token);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (!AnonMessage.class.isAssignableFrom(obj.getClass())) {
+            return false;
+        }
+        final AnonMessage other = (AnonMessage) obj;
+        if ((this.token == null) ? (other.token != null) : !this.token.equals(other.token)) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 3;
+        hash = 53 * hash + (this.token != null ? this.token.hashCode() : 0);
+        // Used if we implement a sender field
+        // hash = 53 * hash + this.sender;
+        return hash;
     }
 }
