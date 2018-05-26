@@ -410,6 +410,7 @@ public class SessionManager extends Thread {
         if (logged_in) {
             String loginContext = "Context: Received LOGIN, now in loginClient (in SessionManager)";
             Integer token = clientRegistry.loginUser(username, secret, loginContext, Integer.MIN_VALUE);
+
             String msg = MessageProcessor.getLoginSuccessMsg(username);
             c.writeMsg(msg);
             return token;
@@ -443,7 +444,7 @@ public class SessionManager extends Thread {
      * exists, sends a REDIRECT message with that server's hostname and port number.
      * This has been implemented to return the FIRST server that has two or less connections.
      * @param c The connection to send the message onn**/
-    public void checkRedirectClient(Connection c, String username, String secret) {
+    public boolean checkRedirectClient(Connection c, String username, String secret) {
         Integer logoutToken;
         String logoutBroadcastMsg;
         String msg;
@@ -469,7 +470,7 @@ public class SessionManager extends Thread {
                     // LOGOUT_BROADCAST should have been sent. Will now disconnect user and log them out.
                     c.writeMsg(msg);
                     closeConnection(c, "Close " + logoutContext);
-                    break;
+                    return true;
                 }
                 else {
                     log.debug("Failed Redirection; logoutClient failed. Trying with next server");
@@ -480,14 +481,15 @@ public class SessionManager extends Thread {
         if (redirect && redirectFailed) {
             log.debug("Completely Failed Redirection; logoutClient failed.");
         }
+        return false;
     }
 
     public void delayDisconnect() {
-        delayDisconnect(REDIRECT_DELAY);
+        delayThread(REDIRECT_DELAY);
     }
 
 
-    public void delayDisconnect(Integer delay) {
+    public void delayThread(Integer delay) {
         try {
             Thread.sleep(delay);
         }
@@ -699,7 +701,6 @@ public class SessionManager extends Thread {
         }
         return Integer.MIN_VALUE;
     }
-
 
     public boolean conIsClient(Connection con) {
         return clientConnections.containsKey(con);

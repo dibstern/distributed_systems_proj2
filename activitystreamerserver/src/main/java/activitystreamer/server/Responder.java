@@ -17,6 +17,8 @@ import java.util.Map;
 
 public class Responder {
 
+    private static final boolean TESTING_DELAY = true;
+
     /**
      * @param json The JSON object received from the client
      * @param con The connection the object was received from
@@ -44,21 +46,35 @@ public class Responder {
 
                     // TODO: Register Login status with ClientRegistry
 
-                    String username = (String) json.get("username");
+                    String user = (String) json.get("username");
 
-                    if (username.equals("anonymous")) {
+                    if (user.equals("anonymous")) {
                         // Do not need to check secret against username as is anonymous - login client
-                        SessionManager.getInstance().loginAnonymousClient(con, username);
+                        sessionManager.loginAnonymousClient(con, user);
                     }
                     else {
                         // Client logging in with username - check secret and username matches what is stored
                         String secret = (String) json.get("secret");
-                        Integer token = sessionManager.loginClient(con, username, secret);
+                        Integer token = sessionManager.loginClient(con, user, secret);
                         if (!token.equals(Integer.MIN_VALUE)) {
-                            sessionManager.serverBroadcast(MessageProcessor.getLoginBroadcast(username, secret, token));
+                            sessionManager.serverBroadcast(MessageProcessor.getLoginBroadcast(user, secret, token));
                         }
                         // Check if client should be redirected to another server
-                        sessionManager.checkRedirectClient(con, username, secret);
+                        boolean redirected = sessionManager.checkRedirectClient(con, user, secret);
+
+                        // If not redirected, send the user all of the messages that are waiting for them
+                        if (!redirected) {
+                            ArrayList<JSONObject> ackMsgs = sessionManager.getClientRegistry().messageFlush(con, user);
+
+                            // Send the ACKs to all servers!
+                            if (!ackMsgs.isEmpty()) {
+                                ackMsgs.forEach((ackMessage) -> {
+                                    if (ackMessage != null) {
+                                        sessionManager.serverBroadcast(ackMessage.toString());
+                                    }
+                                });
+                            }
+                        }
                     }
                 }
             });
@@ -104,6 +120,10 @@ public class Responder {
                     // Retrieve the logged in users (known to the clientRegistry at this time)
                     ArrayList<String> loggedInUsers = clientRegistry.getLoggedInUsers();
                     loggedInUsers.remove(user);     // Remove the sender
+
+                    if (TESTING_DELAY) {
+                        sessionManager.delayThread(3000);
+                    }
 
                     // Add message and its expected recipients to ClientRegistry and retrieve the allocated token
                     Integer msgToken = clientRegistry.addClientMsgToRegistry(user, clientMessage, loggedInUsers);

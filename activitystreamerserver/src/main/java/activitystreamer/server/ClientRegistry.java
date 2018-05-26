@@ -86,8 +86,7 @@ public class ClientRegistry {
         String jsonArrayString = MessageProcessor.getGson().toJson(recordArray);
 
         // Returns a JSONObject
-        JSONObject clientRegistryJsonObj = MessageProcessor.toJson(jsonArrayString, true, "registry");
-        return clientRegistryJsonObj;
+        return MessageProcessor.toJson(jsonArrayString, true, "registry");
     }
 
     public void addFreshClient(String username, String secret) {
@@ -132,8 +131,7 @@ public class ClientRegistry {
         else {
             tokenUsed = getLoginToken(user, login) + 1;
         }
-        int validToken = getClientRecord(user).updateLoggedIn(tokenUsed, loginContext);
-        return validToken;
+        return getClientRecord(user).updateLoggedIn(tokenUsed, loginContext);
     }
 
     private Integer getLoginToken(String user, Boolean login) {
@@ -214,10 +212,70 @@ public class ClientRegistry {
         getClientRecord(sender).receivedMessage(receivers, token);
     }
 
+    // TODO: A version that looks for any messages to deliver for a particular user, sends them, returns a MSG_ACKS,
+    // TODO: To be used when a user logs in!
+    public ArrayList<JSONObject> messageFlush(Connection con, String recipient) {
+
+        ArrayList<JSONObject> ackMessages = new ArrayList<JSONObject>();
+
+        clientRecords.forEach((sender, senderRecord) -> {
+            JSONObject ackMessage = sendWaitingMessages(con, recipient, sender);
+            if (ackMessage != null) {
+                ackMessages.add(ackMessage);
+            }
+        });
+        return ackMessages;
+    }
+
+
+
+    public JSONObject sendWaitingMessages(Connection con, String recipient, String sender) {
+        ClientRecord senderRecord = getClientRecord(sender);
+
+        HashMap<Integer, ArrayList<String>> acks = sendWaitingMessages(con, recipient, sender, senderRecord);
+
+        // Register Sent Message and add ACK messages, if any
+        if (!acks.isEmpty()) {
+            registerAcks(acks, sender);
+            JSONObject ackMessage = MessageProcessor.getStartAckMsg(sender);
+            ackMessage.put("messages", acks);
+            return ackMessage;
+        }
+        return null;
+    }
+
+
+    public HashMap<Integer, ArrayList<String>> sendWaitingMessages(Connection con, String recipient,
+                                                                   String sender, ClientRecord senderRecord) {
+        HashMap<Integer, ArrayList<String>> acks = new HashMap<Integer, ArrayList<String>>();
+
+        // While there are messages that can be sent, send them!
+        Message m = senderRecord.getNextMessage(recipient);
+        while (m != null) {
+
+            // Send the message
+            JSONObject activityBroadcastMsg = m.getClientMessage();
+            Integer token = m.getToken();
+            con.writeMsg(activityBroadcastMsg.toString());
+
+            // Record the message as sent
+            m.receivedMessage(recipient);
+
+            // Add an ACK
+            ArrayList<String> users = new ArrayList<String>();
+            users.add(recipient);
+            acks.put(token, users);
+
+            // Attempt to retrieve another message
+            m = senderRecord.getNextMessage(recipient);
+        }
+        // Return our messages to acknowledge
+        return acks;
+    }
+
+
 
     public JSONObject messageFlush(HashMap<String, Connection> clientConnections, String sender) {
-
-        boolean noMessagesSent = true;
 
         // To collect tokens and clients who received messages of that token number from the sender
         HashMap<Integer, ArrayList<String>> acks = new HashMap<Integer, ArrayList<String>>();
@@ -252,52 +310,41 @@ public class ClientRegistry {
         });
 
         // Return null if no messages sent
-        if (!acks.isEmpty()) {
-            noMessagesSent = false;
+        if (acks.isEmpty()) {
+            return null;
         }
 
         // Report the messages as having been sent
-        JSONObject theMessages = registerAcks(acks, sender);
+        registerAcks(acks, sender);
 
         // Return the ACKs, to send to servers!
         JSONObject ackMessage = MessageProcessor.getStartAckMsg(sender);
-        ackMessage.put("messages", theMessages);
+        ackMessage.put("messages", acks);
 
-        if (noMessagesSent) {
-            return null;
-        }
         return ackMessage;
     }
 
-    public JSONObject registerAcks(HashMap<Integer, ArrayList<String>> acks, String sender) {
-
-        JSONObject theMessages = new JSONObject();
+    public void registerAcks(HashMap<Integer, ArrayList<String>> acks, String sender) {
 
         // TODO: What if we receive a MSG_ACKS for a user we haven't yet registered?
         if (!userExists(sender)) {
-
+            // System.out.print("");
         }
         else {
             // Report the messages as having been sent
             ClientRecord senderRecord = getClientRecord(sender);
-            acks.forEach((token, recipients) -> {
-                senderRecord.receivedMessage(recipients, token);
-                theMessages.put(token, recipients);
-            });
+            acks.forEach((token, recipients) -> senderRecord.receivedMessage(recipients, token));
         }
-        return theMessages;
     }
 
 
 
 
+    // ------------------------------ GENERAL GETTERS & SETTERS ------------------------------
 
-
-    // ------------------------------ GENERAL GETTERS & SETTTERS ------------------------------
-
-    private ClientRecord getClientRecord(String user) {
+    public ClientRecord getClientRecord(String user) {
         if (!clientRecords.containsKey(user)) {
-            SessionManager.getInstance().logDebug("ERROR: - getClientRecord in clientRegistry - user: " + user +
+            SessionManager.logDebug("ERROR: - getClientRecord in clientRegistry - user: " + user +
                     " not in clientRecords" + clientRecords);
             System.exit(1);
             return null;
