@@ -650,7 +650,7 @@ public class SessionManager extends Thread {
     //
     // CONNECTION CLOSURE
     //
-
+    // TODO: Update for Anonymous Users
     public void ensureLogoutDisconnectedClient(Connection c) {
         ConnectedClient client = getConnectedClient(c);
         String username = client.getUsername();
@@ -663,7 +663,7 @@ public class SessionManager extends Thread {
     }
 
     /** Initiate closure of a given connection and remove from the appropriate array
-     * @param c The connection to be closed  **/
+     * @param c The connection to be closed  */
     public void closeConnection(Connection c, String closeConnectionContext) {
         c.closeCon();
         deleteClosedConnection(c, closeConnectionContext);

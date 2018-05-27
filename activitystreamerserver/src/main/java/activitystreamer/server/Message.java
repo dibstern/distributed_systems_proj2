@@ -11,6 +11,7 @@ public class Message implements Comparable<Message> {
     private Integer token;
 
 
+
     // ------------------------------ OBJECT CREATION ------------------------------
     public Message(Integer token, JSONObject clientMessage, ArrayList<String> recipients) {
         this.token = token;
@@ -100,6 +101,7 @@ public class Message implements Comparable<Message> {
     public int compareTo(Message anotherMessage) {
         return anotherMessage.getToken().compareTo(this.token);
     }
+
 
     @Override
     public boolean equals(Object obj) {

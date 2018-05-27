@@ -175,8 +175,7 @@ public class Responder {
             });
 
             // ------------------------- FROM CLIENT & SERVER -------------------------
-            /* Invalid Message received from Client OR Server. Do not bother checking if the structure of the
-             * INVALID_MESSAGE is itself valid, given the connection will be closed either way. **/
+            /* Invalid Message received from Client OR Server. */
             responses.put("INVALID_MESSAGE", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
