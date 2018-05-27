@@ -71,15 +71,18 @@ public class ClientRegistry {
         anonRecord.updateRecord(anonRecordJson);
     }
 
-    private void loginAnonUser() {
+
+    public Integer loginAnonUser() {
         String loginContext = "Context: in loginAnonUser in ClientRegistry";
-        anonRecord.updateLoggedIn(numLoggedIn + 1, loginContext);
+        return anonRecord.login(loginContext);
     }
 
-    private void logoutAnonUser() {
+    public Integer logoutAnonUser() {
         String logoutContext = "Context: in logoutAnonUser in ClientRegistry";
-        anonRecord.logout(logoutContext);
+        return anonRecord.logout(logoutContext);
     }
+
+
 
     private void addRecord(String user, ClientRecord clientRecord) {
         clientRecords.put(user, clientRecord);
@@ -120,15 +123,6 @@ public class ClientRegistry {
         ClientRecord record = getClientRecord(username);
         return record.sameSecret(secret);
     }
-
-    public Integer loginAnonUser(String loginContext) {
-        return anonRecord.login(loginContext);
-    }
-
-    public Integer logoutAnonUser(String loginContext) {
-        return anonRecord.logout(loginContext);
-    }
-
 
     public Integer loginUser(String user, String secret, String loginContext, Integer optionalToken) {
         int tokenSent = setLogin(user, loginContext, true, optionalToken);
