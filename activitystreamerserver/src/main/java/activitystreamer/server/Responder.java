@@ -126,7 +126,8 @@ public class Responder {
                     }
 
                     // Add message and its expected recipients to ClientRegistry and retrieve the allocated token
-                    Integer msgToken = clientRegistry.addClientMsgToRegistry(user, clientMessage, loggedInUsers);
+                    // TODO: Properly retrieve the number of AnonUsers, and add to the message
+                    Integer msgToken = clientRegistry.addClientMsgToRegistry(user, clientMessage, loggedInUsers, 0);
 
                     // Add message token & recipients to ACTIVITY_BROADCAST message
                     String activityBroadcastMsg = MessageProcessor.getActivityBroadcastMsg(clientMessage, loggedInUsers,
@@ -222,8 +223,10 @@ public class Responder {
                     // Add message to ClientRegistry
                     ClientRegistry clientRegistry = sessionManager.getClientRegistry();
                     String sender = json.get("username").toString();
-                    Message received_message = new Message(json);
-                    clientRegistry.addMessageToRegistry(received_message, sender);
+
+                    // TODO: Determine if Message or ClientMessage, assign appropriately
+                    ClientMessage received_message = new ClientMessage(json);
+                    clientRegistry.addClientMessageToRegistry(received_message, sender);
 
                     ArrayList<String> remaining_recipients = received_message.getRemainingRecipients();
 

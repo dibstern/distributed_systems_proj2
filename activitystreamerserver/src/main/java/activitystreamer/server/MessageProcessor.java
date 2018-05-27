@@ -466,6 +466,9 @@ public class MessageProcessor {
         JSONObject recipientsJson = toJson(getGson().toJson(loggedInUsers), true, "recipients");
         msg.putAll(recipientsJson);
 
+        // TODO: Actually add the number of anon users
+        msg.put("num_anon", 0);
+
         System.out.println("MADE ACTIVITY_BROADCAST message: " + msg.toString());
         return msg.toString();
     }

@@ -68,9 +68,8 @@ public class ClientRegistry {
     }
 
     public void updateAnonRecord(JSONObject anonRecordJson) {
-        anonRecord.updateRecord(anonRecordJson);
+        // anonRecord.updateRecord(anonRecordJson);
     }
-
 
     public Integer loginAnonUser() {
         String loginContext = "Context: in loginAnonUser in ClientRegistry";
@@ -123,6 +122,15 @@ public class ClientRegistry {
         ClientRecord record = getClientRecord(username);
         return record.sameSecret(secret);
     }
+
+    public void loginAnonUser(String loginContext) {
+        anonRecord.login(loginContext);
+    }
+
+    public void logoutAnonUser(String logoutContext) {
+        anonRecord.logout(logoutContext);
+    }
+
 
     public Integer loginUser(String user, String secret, String loginContext, Integer optionalToken) {
         int tokenSent = setLogin(user, loginContext, true, optionalToken);
@@ -224,17 +232,34 @@ public class ClientRegistry {
 
     // ------------------------------ MESSAGE HANDLING ------------------------------
 
-    public Integer addClientMsgToRegistry(String sender, JSONObject activityMsg, ArrayList<String> loggedInUsers) {
-        return getClientRecord(sender).createAndAddMessage(activityMsg, loggedInUsers);
+    public Integer addClientMsgToRegistry(String sender, JSONObject activityMsg, ArrayList<String> loggedInUsers, Integer numAnonUsers) {
+        return getClientRecord(sender).createAndAddMessage(activityMsg, loggedInUsers, numAnonUsers);
     }
 
-    public void addMessageToRegistry(Message msg, String user) {
+    public void addAnonMsgToRegistry(JSONObject activityMsg, ArrayList<String> loggedInUsers, Integer numAnonUsers) {
+        anonRecord.createAndAddMessage(activityMsg, loggedInUsers, numAnonUsers);
+    }
+
+    public void addClientMessageToRegistry(Message msg, String user) {
         getClientRecord(user).addMessage(msg);
     }
 
-    public void receivedMessage(String sender, ArrayList<String> receivers, Integer token) {
-        getClientRecord(sender).receivedMessage(receivers, token);
+    public void addAnonMessageToRegistry(Message msg) {
+        anonRecord.addMessage(msg);
     }
+
+    public void receivedMessage(String sender, ArrayList<String> receivers, Integer token, Integer numAnonReceivers) {
+
+    }
+
+
+    public void receivedClientMessage(String sender, ArrayList<String> receivers, Integer token, Integer numAnonReceivers) {
+        getClientRecord(sender).receivedMessage(receivers, token, numAnonReceivers);
+    }
+
+    // NOTE: Cannot have a receivedAnonMessage equivalent, due to the inability to identify messages via tokens.
+
+
 
     // TODO: A version that looks for any messages to deliver for a particular user, sends them, returns a MSG_ACKS,
     // TODO: To be used when a user logs in!
@@ -274,7 +299,7 @@ public class ClientRegistry {
         HashMap<Integer, ArrayList<String>> acks = new HashMap<Integer, ArrayList<String>>();
 
         // While there are messages that can be sent, send them!
-        Message m = senderRecord.getNextMessage(recipient);
+        ClientMessage m = senderRecord.getNextMessage(recipient);
         while (m != null) {
 
             // Send the message
@@ -309,7 +334,7 @@ public class ClientRegistry {
         clientConnections.forEach((user, con) -> {
 
             // Send all possible messages to client
-            Message m = senderRecord.getNextMessage(user);
+            ClientMessage m = senderRecord.getNextMessage(user);
             while (m != null) {
 
                 // Send the message
@@ -357,7 +382,8 @@ public class ClientRegistry {
         else {
             // Report the messages as having been sent
             ClientRecord senderRecord = getClientRecord(sender);
-            acks.forEach((token, recipients) -> senderRecord.receivedMessage(recipients, token));
+            // TODO -> Build in numAnonReceivers
+            acks.forEach((token, recipients) -> senderRecord.receivedMessage(recipients, token, 0));
         }
     }
 

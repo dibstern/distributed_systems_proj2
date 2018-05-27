@@ -741,7 +741,7 @@ public class SessionManager extends Thread {
      * @param receivingUsers A HashMap of Usernames and Secrets
      * @return The clientConnections HashMap that contains the connections and information about the associated clients.
      */
-    public static HashMap<String, Connection> getClientConnections(HashMap<String, String> receivingUsers) {
+    public HashMap<String, Connection> getClientConnections(HashMap<String, String> receivingUsers) {
         HashMap<String, Connection> connectedClients = new HashMap<String, Connection>();
         clientConnections.forEach((con, client) -> {
             String conUsername = client.getUsername();
