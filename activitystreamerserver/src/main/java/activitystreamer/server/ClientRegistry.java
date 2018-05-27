@@ -10,14 +10,17 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ClientRegistry {
 
     private ConcurrentHashMap<String, ClientRecord> clientRecords;
+    private AnonRecord anonRecord;
 
     // Client Records can either start empty, or they can be provided
     public ClientRegistry() {
         this.clientRecords = new ConcurrentHashMap<String, ClientRecord>();
+        this.anonRecord = new AnonRecord("anonymous");
     }
 
-    public ClientRegistry(ConcurrentHashMap<String, ClientRecord> providedClientRecords) {
+    public ClientRegistry(ConcurrentHashMap<String, ClientRecord> providedClientRecords, AnonRecord providedAnonRecord) {
         this.clientRecords = providedClientRecords;
+        this.anonRecord = providedAnonRecord;
     }
 
 
@@ -55,11 +58,27 @@ public class ClientRegistry {
                     clientRecords.remove(username);
                 }
             }
+
+
             // Or create a new record
             else {
                 addRecord(username, new ClientRecord(clientRecordJson));
             }
         });
+    }
+
+    public void updateAnonRecord(JSONObject anonRecordJson) {
+        anonRecord.updateRecord(anonRecordJson);
+    }
+
+    private void loginAnonUser() {
+        String loginContext = "Context: in loginAnonUser in ClientRegistry";
+        anonRecord.updateLoggedIn(numLoggedIn + 1, loginContext);
+    }
+
+    private void logoutAnonUser() {
+        String logoutContext = "Context: in logoutAnonUser in ClientRegistry";
+        anonRecord.logout(logoutContext);
     }
 
     private void addRecord(String user, ClientRecord clientRecord) {
@@ -101,6 +120,15 @@ public class ClientRegistry {
         ClientRecord record = getClientRecord(username);
         return record.sameSecret(secret);
     }
+
+    public Integer loginAnonUser(String loginContext) {
+        return anonRecord.login(loginContext);
+    }
+
+    public Integer logoutAnonUser(String loginContext) {
+        return anonRecord.logout(loginContext);
+    }
+
 
     public Integer loginUser(String user, String secret, String loginContext, Integer optionalToken) {
         int tokenSent = setLogin(user, loginContext, true, optionalToken);
@@ -150,6 +178,8 @@ public class ClientRegistry {
         catch (LoginException e) {
             e.printStackTrace();
             System.exit(1);
+
+            // Return Integer.MAX_VALUE instead?
             return -2;
         }
     }
