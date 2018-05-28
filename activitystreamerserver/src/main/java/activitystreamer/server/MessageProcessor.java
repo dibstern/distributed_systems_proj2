@@ -284,7 +284,12 @@ public class MessageProcessor {
     public static String getLoginSuccessMsg(String username) {
         JSONObject msg = new JSONObject();
         msg.put("command", "LOGIN_SUCCESS");
-        msg.put("info", "logged in as user " + username);
+        if (isAnonymous(username)) {
+            msg.put("info", "logged in as an anonymous user.");
+        }
+        else {
+            msg.put("info", "logged in as user " + username);
+        }
         return msg.toString();
     }
 
@@ -556,6 +561,10 @@ public class MessageProcessor {
         anonJsonMsg.put("activity", serverJsonMessage.get("activity"));
         anonJsonMsg.put("username", serverJsonMessage.get("username"));
         return anonJsonMsg;
+    }
+
+    public static boolean isAnonymous(String username) {
+        return (username.substring(0, 9).equals("anonymous"));
     }
 
 }
