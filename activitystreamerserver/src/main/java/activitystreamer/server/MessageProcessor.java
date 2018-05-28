@@ -457,6 +457,13 @@ public class MessageProcessor {
         return msg.toString();
     }
 
+    public static String getAnonCheckBroadcast(JSONObject anonClientRecord) {
+        JSONObject msg = new JSONObject();
+        msg.put("command", "ANON_CHECK");
+        msg.put("anon_record", anonClientRecord);
+        return msg.toString();
+    }
+
     /** Creates an ACTIVITY_MESSAGE message to be sent across the network.
      * @param json The activity message
      * @return Msg the message to be sent across the network

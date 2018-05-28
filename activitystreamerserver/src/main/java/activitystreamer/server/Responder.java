@@ -248,6 +248,33 @@ public class Responder {
                     SessionManager.getInstance().forwardServerMsg(con, json.toString());
                 }
             });
+            responses.put("ANON_CHECK", new ServerCommand() {
+                @Override
+                public void execute(JSONObject json, Connection con) {
+                    // Add the ClientRecord to server's client Registry, and forward through network
+                    JSONObject anonRecordTmp = (JSONObject) json.get("anon_record");
+                    ClientRecord newAnonRecord = new ClientRecord(anonRecordTmp);
+                    SessionManager sessionManager = SessionManager.getInstance();
+                    String username = newAnonRecord.getUsername();
+                    String secret = newAnonRecord.getSecret();
+
+                    if (sessionManager.clientLoggedInLocally(username, secret)) {
+                        // This server has a direct connection with the anonymous client
+                        // Broadcast an ANON_CONFIRM message through network
+                        String msg = MessageProcessor.getAnonConfirmBroadcast(anonRecordTmp);
+                        sessionManager.serverBroadcast(msg);
+                    }
+                    else
+                    {
+                        // This server does not have a direct connection with anonymous client in question
+                        // If ClientRecord for this anonymous client exists, remove record and forward message
+                        // through network
+                        ClientRegistry clientRegistry = sessionManager.getClientRegistry();
+                        clientRegistry.removeUser(username);
+                        sessionManager.forwardServerMsg(con, json.toString());
+                    }
+                }
+            });
             /* Received an activity broadcast message from a server. Forward message on to all other connections, except
              * to the sending server. **/
             responses.put("ACTIVITY_BROADCAST", new ServerCommand() {
