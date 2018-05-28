@@ -7,6 +7,7 @@ package activitystreamer.server;
 
 import activitystreamer.util.ServerCommand;
 import activitystreamer.util.Response;
+import activitystreamer.util.Settings;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
@@ -43,24 +44,39 @@ public class Responder {
                 public void execute(JSONObject json, Connection con) {
 
                     SessionManager sessionManager = SessionManager.getInstance();
-
-                    // TODO: Register Login status with ClientRegistry
-
                     String user = (String) json.get("username");
+                    String username = user;
+                    String secret;
+                    Integer token;
 
                     if (user.equals("anonymous")) {
                         // Do not need to check secret against username as is anonymous - login client
-                        sessionManager.loginAnonymousClient(con, user);
+                        username += "-" + Settings.nextSecret();
+                        secret = Settings.nextSecret();
+
+                        // Check if there is another server client should connect to, send getRedirectMsg message if so
+                        boolean redirected = sessionManager.checkRedirectClient(con, username, secret, true);
+
+                        // If we didn't redirect, then log this client in!
+                        if (!redirected) {
+                            // Add connection to clientConnections, create ConnectedClient, Add to ClientRegistry
+                            token = sessionManager.loginAnonymousClient(con, user, secret);
+
+                            // If login succeeded, broadcast LOGIN_BROADCAST message
+                            if (!token.equals(Integer.MIN_VALUE)) {
+                                sessionManager.serverBroadcast(MessageProcessor.getLoginBroadcast(user, secret, token));
+                            }
+                        }
                     }
                     else {
                         // Client logging in with username - check secret and username matches what is stored
-                        String secret = (String) json.get("secret");
-                        Integer token = sessionManager.loginClient(con, user, secret);
+                        secret = (String) json.get("secret");
+                        token = sessionManager.loginClient(con, user, secret);
                         if (!token.equals(Integer.MIN_VALUE)) {
                             sessionManager.serverBroadcast(MessageProcessor.getLoginBroadcast(user, secret, token));
                         }
                         // Check if client should be redirected to another server
-                        boolean redirected = sessionManager.checkRedirectClient(con, user, secret);
+                        boolean redirected = sessionManager.checkRedirectClient(con, user, secret, false);
 
                         // If not redirected, send the user all of the messages that are waiting for them
                         if (!redirected) {
@@ -406,8 +422,17 @@ public class Responder {
 
                     SessionManager sessionManager = SessionManager.getInstance();
 
-                    // Update if we're the sender of the request, else forward LOCK_ALLOWED to all servers except sender
-                    if (!sessionManager.updateIfSender(username, secret)) {
+                    // If we're not the sender, then forward.
+                    ConnectedClient client = sessionManager.getClientIfConnected(username, secret);
+
+                    // We're connected to the client, so we're the sender. Update the ConnectedClient if it's not Anon!
+                    if (client != null) {
+                        if (!MessageProcessor.isAnonymous(username)) {
+                            sessionManager.updateAndCompleteRegistration(client, username, secret);
+                        }
+                    }
+                    // We're not connected to the client so we're not the sender; forward the LOCK_ALLOWED message!
+                    else {
                         sessionManager.forwardServerMsg(con, json.toString());
                     }
                 }
