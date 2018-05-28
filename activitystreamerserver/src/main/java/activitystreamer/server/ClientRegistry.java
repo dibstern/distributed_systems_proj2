@@ -83,7 +83,7 @@ public class ClientRegistry {
 
 
 
-    private void addRecord(String user, ClientRecord clientRecord) {
+    public void addRecord(String user, ClientRecord clientRecord) {
         clientRecords.put(user, clientRecord);
         System.out.println("            Added " + user + " to the registry: " + clientRecords);
     }

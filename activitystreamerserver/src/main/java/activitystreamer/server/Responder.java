@@ -220,6 +220,18 @@ public class Responder {
                     SessionManager.getInstance().getClientRegistry().updateRecords(registry);
                 }
             });
+            responses.put("ANON_CONFIRM", new ServerCommand() {
+                @Override
+                public void execute(JSONObject json, Connection con) {
+                    // Add the ClientRecord to server's client Registry, and forward through network
+                    JSONObject anonRecordTmp = (JSONObject) json.get("anon_record");
+                    ClientRecord newAnonRecord = new ClientRecord(anonRecordTmp);
+                    String username = newAnonRecord.getUsername();
+                    ClientRegistry clientRegistry = SessionManager.getInstance().getClientRegistry();
+                    clientRegistry.addRecord(username, newAnonRecord);
+                    SessionManager.getInstance().forwardServerMsg(con, json.toString());
+                }
+            });
             /* Received an activity broadcast message from a server. Forward message on to all other connections, except
              * to the sending server. **/
             responses.put("ACTIVITY_BROADCAST", new ServerCommand() {
