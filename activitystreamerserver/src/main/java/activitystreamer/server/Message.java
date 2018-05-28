@@ -8,28 +8,14 @@ public class Message implements Comparable<Message> {
     private ArrayList<String> recipients;
     private JSONObject clientMessage;
     private JSONObject serverMessage;
-    private Integer num_anon;
+    private Integer token;
 
 
     // ------------------------------ OBJECT CREATION ------------------------------
-    // For Anon Messages (No token required)
-    public Message(JSONObject clientMessage, ArrayList<String> recipients, Integer numAnonRecipients) {
-        this.clientMessage = MessageProcessor.cleanClientMessage(clientMessage);
+    public Message(Integer token, JSONObject clientMessageJson, ArrayList<String> recipients) {
+        this.clientMessage = MessageProcessor.cleanClientMessage(clientMessageJson);
         this.recipients = new ArrayList<String>(recipients);
-        this.num_anon = numAnonRecipients;
-
-        // Provided client version of the message -> Create server message
-        String recipientsJsonString = MessageProcessor.getGson().toJson(recipients);
-        JSONObject addedServerInfo = MessageProcessor.toJson(recipientsJsonString, true, "recipients");
-        this.serverMessage = new JSONObject();
-        this.serverMessage.putAll(this.clientMessage);
-        this.serverMessage.putAll(addedServerInfo);
-    }
-
-    public Message(Integer token, JSONObject clientMessage, ArrayList<String> recipients, Integer numAnonRecipients) {
-        this.clientMessage = MessageProcessor.cleanClientMessage(clientMessage);
-        this.recipients = new ArrayList<String>(recipients);
-        this.num_anon = numAnonRecipients;
+        this.token = token;
 
         // Provided client version of the message -> Create server message
         String recipientsJsonString = MessageProcessor.getGson().toJson(recipients);
@@ -41,13 +27,14 @@ public class Message implements Comparable<Message> {
     }
 
     // Uses a server's Json Message to construct a Message
-    public Message(JSONObject jsonMessage) {
-        this.recipients = new ArrayList<String>(toRecipientsArrayList(jsonMessage.get("recipients")));
-        this.serverMessage = jsonMessage;
-        this.num_anon = ((Long) jsonMessage.get("num_anon")).intValue();
+    public Message(JSONObject serverMessage) {
+
+        this.recipients = new ArrayList<String>(toRecipientsArrayList(serverMessage.get("recipients")));
+        this.serverMessage = serverMessage;
+        this.token = ((Long) serverMessage.get("token")).intValue();
 
         // Provided server version of the message -> Create client message
-        this.clientMessage = MessageProcessor.cleanClientMessage(MessageProcessor.serverToClientJson(jsonMessage));
+        this.clientMessage = MessageProcessor.cleanClientMessage(MessageProcessor.serverToClientJson(serverMessage));
     }
 
     public ArrayList<String> toRecipientsArrayList(Object recipientsObj) {
@@ -67,12 +54,11 @@ public class Message implements Comparable<Message> {
      * @param users A list of users who have received this message
      * @return true if this Message instance should be deleted. false, otherwise.
      */
-    public boolean receivedMessages(ArrayList<String> users, Integer numAnonReceivers) {
+    public boolean receivedMessages(ArrayList<String> users) {
         users.forEach((user) -> {
             receivedMessage(user);
         });
-        this.num_anon -= numAnonReceivers;
-        if (this.recipients.size() == 0 && numAnonReceivers <= 0) {
+        if (this.recipients.size() == 0) {
             return true;
         }
         return false;
@@ -93,11 +79,6 @@ public class Message implements Comparable<Message> {
         return this.recipients.isEmpty();
     }
 
-    public boolean anonReceivedMessages(Integer numAnon) {
-        this.num_anon -= numAnon;
-        return (this.num_anon <= 0);
-    }
-
     public JSONObject getClientMessage() {
         return this.clientMessage;
     }
@@ -106,25 +87,20 @@ public class Message implements Comparable<Message> {
         return recipients.contains(user);
     }
 
-    public boolean addressedToAnon() {
-        return this.num_anon > 0;
-    }
-
     public ArrayList<String> getRemainingRecipients() {
         return this.recipients;
-    }
-
-    public Integer getRemainingAnonRecipients() {
-        return this.num_anon;
     }
 
 
     // ------------------------------ COMPARING MESSAGES ------------------------------
 
-    // TODO: Get a better method of Ordering
+    public Integer getToken() {
+        return this.token;
+    }
+
     @Override
     public int compareTo(Message anotherMessage) {
-        return anotherMessage.clientMessage.toString().compareTo(this.clientMessage.toString());
+        return anotherMessage.getToken().compareTo(this.token);
     }
 
     @Override
@@ -136,7 +112,7 @@ public class Message implements Comparable<Message> {
             return false;
         }
         final Message other = (Message) obj;
-        if ((this.clientMessage == null) ? (other.clientMessage != null) : !this.clientMessage.equals(other.clientMessage)) {
+        if ((this.token == null) ? (other.token != null) : !this.clientMessage.equals(other.token)) {
             return false;
         }
         // Used if we implement a sender field

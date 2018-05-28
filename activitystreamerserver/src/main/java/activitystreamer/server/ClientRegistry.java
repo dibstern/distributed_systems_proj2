@@ -10,17 +10,14 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ClientRegistry {
 
     private ConcurrentHashMap<String, ClientRecord> clientRecords;
-    private AnonRecord anonRecord;
 
     // Client Records can either start empty, or they can be provided
     public ClientRegistry() {
         this.clientRecords = new ConcurrentHashMap<String, ClientRecord>();
-        this.anonRecord = new AnonRecord("anonymous");
     }
 
-    public ClientRegistry(ConcurrentHashMap<String, ClientRecord> providedClientRecords, AnonRecord providedAnonRecord) {
+    public ClientRegistry(ConcurrentHashMap<String, ClientRecord> providedClientRecords) {
         this.clientRecords = providedClientRecords;
-        this.anonRecord = providedAnonRecord;
     }
 
 
@@ -37,12 +34,17 @@ public class ClientRegistry {
      */
     public void updateRecords(JSONArray registry) {
 
+        // For comparing registries later
+        ConcurrentHashMap<String, ClientRecord> givenRegistry = new ConcurrentHashMap<String, ClientRecord>();
+
         // Iterate through Array
         registry.forEach((clientRecordObject) -> {
 
             // Convert each record into a JSONObject
             JSONObject clientRecordJson = (JSONObject) clientRecordObject;
             String username = clientRecordJson.get("username").toString();
+            ClientRecord givenRecord = new ClientRecord(clientRecordJson);
+            givenRegistry.put(username, givenRecord);
 
             // Update existing record
             if (userExists(username)) {
@@ -58,36 +60,44 @@ public class ClientRegistry {
                     clientRecords.remove(username);
                 }
             }
-
-
             // Or create a new record
             else {
-                addRecord(username, new ClientRecord(clientRecordJson));
+                addRecord(username, givenRecord);
             }
         });
+        // If we have an anon record that the given registry does not have, send an ANON_CHECK & delete the record
+        clientRecords.forEach((user, record) -> {
+            if (MessageProcessor.isAnonymous(user) && !givenRegistry.containsKey(user)) {
+
+                // Convert the record into a JSONObject
+                String recordJsonString = MessageProcessor.getGson().toJson(record);
+                JSONObject recordJson = MessageProcessor.toJson(recordJsonString, false, "");
+                String anonCheckMsg = MessageProcessor.getAnonCheck(recordJson);
+
+                // Broadcast the ANON_CHECK and delete the user from the registry
+                // (we'll add it back if & when we get an ANON_SUCCESS message)
+                SessionManager.getInstance().serverBroadcast(anonCheckMsg);
+                clientRecords.remove(user);
+            }
+        });
+
+
+
+
+
+
+
+
+
+
+
+
     }
-
-    public void updateAnonRecord(JSONObject anonRecordJson) {
-        // anonRecord.updateRecord(anonRecordJson);
-    }
-
-    public Integer loginAnonUser() {
-        String loginContext = "Context: in loginAnonUser in ClientRegistry";
-        return anonRecord.login(loginContext);
-    }
-
-    public Integer logoutAnonUser() {
-        String logoutContext = "Context: in logoutAnonUser in ClientRegistry";
-        return anonRecord.logout(logoutContext);
-    }
-
-
 
     public void addRecord(String user, ClientRecord clientRecord) {
         clientRecords.put(user, clientRecord);
         System.out.println("            Added " + user + " to the registry: " + clientRecords);
     }
-
 
     /**
      * Retrieve the server's Client Registry in the form of a JSONArray.
@@ -121,15 +131,6 @@ public class ClientRegistry {
         }
         ClientRecord record = getClientRecord(username);
         return record.sameSecret(secret);
-    }
-
-    public void loginAnonUser(String loginContext) {
-        anonRecord.login(loginContext);
-    }
-
-    public void logoutAnonUser(String username) {
-
-        clientRecords.remove(username);
     }
 
 
@@ -209,11 +210,14 @@ public class ClientRegistry {
     }
 
 
-    public void removeUser(String username) {
-        if (clientRecords.containsKey(username))
-        {
+    // TODO: Assign value of this function call when called, make sure we print an error message if it doesn't work
+    // TODO: OR just check w/ userExists(user) before calling removeUser(user).
+    public boolean removeUser(String username) {
+        if (clientRecords.containsKey(username)) {
             clientRecords.remove(username);
+            return true;
         }
+        return false;
     }
 
     /**
@@ -232,37 +236,15 @@ public class ClientRegistry {
         return clientCredentials;
     }
 
-
     // ------------------------------ MESSAGE HANDLING ------------------------------
 
-    public Integer addClientMsgToRegistry(String sender, JSONObject activityMsg, ArrayList<String> loggedInUsers, Integer numAnonUsers) {
-        return getClientRecord(sender).createAndAddMessage(activityMsg, loggedInUsers, numAnonUsers);
+    public Integer addMsgToRegistry(String sender, JSONObject activityMsg, ArrayList<String> loggedInUsers) {
+        return getClientRecord(sender).createAndAddMessage(activityMsg, loggedInUsers);
     }
 
-    public void addAnonMsgToRegistry(JSONObject activityMsg, ArrayList<String> loggedInUsers, Integer numAnonUsers) {
-        anonRecord.createAndAddMessage(activityMsg, loggedInUsers, numAnonUsers);
-    }
-
-    public void addClientMessageToRegistry(Message msg, String user) {
+    public void addMessageToRegistry(Message msg, String user) {
         getClientRecord(user).addMessage(msg);
     }
-
-    public void addAnonMessageToRegistry(Message msg) {
-        anonRecord.addMessage(msg);
-    }
-
-    public void receivedMessage(String sender, ArrayList<String> receivers, Integer token, Integer numAnonReceivers) {
-
-    }
-
-
-    public void receivedClientMessage(String sender, ArrayList<String> receivers, Integer token, Integer numAnonReceivers) {
-        getClientRecord(sender).receivedMessage(receivers, token, numAnonReceivers);
-    }
-
-    // NOTE: Cannot have a receivedAnonMessage equivalent, due to the inability to identify messages via tokens.
-
-
 
     // TODO: A version that looks for any messages to deliver for a particular user, sends them, returns a MSG_ACKS,
     // TODO: To be used when a user logs in!
@@ -302,7 +284,7 @@ public class ClientRegistry {
         HashMap<Integer, ArrayList<String>> acks = new HashMap<Integer, ArrayList<String>>();
 
         // While there are messages that can be sent, send them!
-        ClientMessage m = senderRecord.getNextMessage(recipient);
+        Message m = senderRecord.getNextMessage(recipient);
         while (m != null) {
 
             // Send the message
@@ -337,7 +319,7 @@ public class ClientRegistry {
         clientConnections.forEach((user, con) -> {
 
             // Send all possible messages to client
-            ClientMessage m = senderRecord.getNextMessage(user);
+            Message m = senderRecord.getNextMessage(user);
             while (m != null) {
 
                 // Send the message
@@ -386,7 +368,7 @@ public class ClientRegistry {
             // Report the messages as having been sent
             ClientRecord senderRecord = getClientRecord(sender);
             // TODO -> Build in numAnonReceivers
-            acks.forEach((token, recipients) -> senderRecord.receivedMessage(recipients, token, 0));
+            acks.forEach((token, recipients) -> senderRecord.receivedMessage(recipients, token));
         }
     }
 

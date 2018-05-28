@@ -450,31 +450,19 @@ public class MessageProcessor {
         return msg.toString();
     }
 
-    public static String getAnonConfirmBroadcast(JSONObject anonClientRecord) {
+    public static String getAnonConfirm(JSONObject anonClientRecord) {
         JSONObject msg = new JSONObject();
         msg.put("command", "ANON_CONFIRM");
         msg.put("anon_record", anonClientRecord);
         return msg.toString();
     }
 
-    public static String getAnonCheckBroadcast(JSONObject anonClientRecord) {
+    public static String getAnonCheck(JSONObject anonClientRecord) {
         JSONObject msg = new JSONObject();
         msg.put("command", "ANON_CHECK");
         msg.put("anon_record", anonClientRecord);
         return msg.toString();
     }
-
-    /** Creates an ACTIVITY_MESSAGE message to be sent across the network.
-     * @param json The activity message
-     * @return Msg the message to be sent across the network
-     */
-    public static String getActivityMessage(JSONObject json) {
-        JSONObject msg = new JSONObject();
-        msg.put("command", "ACTIVITY_MESSAGE");
-        msg.put("activity", json);
-        return msg.toString();
-    }
-
 
     /** Creates an ACTIVITY_BROADCAST message to be sent across the network.
      * @param json The activity message
@@ -492,10 +480,6 @@ public class MessageProcessor {
         msg.put("token", msgToken);
         JSONObject recipientsJson = toJson(getGson().toJson(loggedInUsers), true, "recipients");
         msg.putAll(recipientsJson);
-
-        // TODO: Actually add the number of anon users
-        msg.put("num_anon", 0);
-
         System.out.println("MADE ACTIVITY_BROADCAST message: " + msg.toString());
         return msg.toString();
     }
@@ -550,28 +534,21 @@ public class MessageProcessor {
         clientJsonMsg.put("command", serverJsonMessage.get("command"));
         clientJsonMsg.put("activity", serverJsonMessage.get("activity"));
         clientJsonMsg.put("username", serverJsonMessage.get("username"));
-        clientJsonMsg.put("secret", serverJsonMessage.get("secret"));
-        clientJsonMsg.put("authenticated_user", serverJsonMessage.get("authenticated_user"));
         return clientJsonMsg;
     }
 
     public static JSONObject cleanClientMessage(JSONObject json) {
         JSONObject cleanedMessage = new JSONObject();
         cleanedMessage.put("activity", json.get("activity"));
-        cleanedMessage.put("command", json.get("command"));
+        cleanedMessage.put("command", "ACTIVITY_BROADCAST");
         return cleanedMessage;
     }
 
-    public static JSONObject serverMsgToAnonMsg(JSONObject serverJsonMessage) {
-        JSONObject anonJsonMsg = new JSONObject();
-        anonJsonMsg.put("command", serverJsonMessage.get("command"));
-        anonJsonMsg.put("activity", serverJsonMessage.get("activity"));
-        anonJsonMsg.put("username", serverJsonMessage.get("username"));
-        return anonJsonMsg;
-    }
-
     public static boolean isAnonymous(String username) {
-        return (username.substring(0, 9).equals("anonymous"));
+        if (username.length() >= 9) {
+            return (username.substring(0, 9).equals("anonymous"));
+        }
+        return false;
     }
 
 }

@@ -108,17 +108,16 @@ public class Responder {
                     ConnectedClient client = sessionManager.getConnectedClient(con);
                     String username = client.getUsername();
                     String secret = client.getSecret();
-                    String logoutContext = "Context: received LOGOUT request from " + username;
+                    String logoutContext = closeConnectionContext + ". Context: received LOGOUT request from " + username;
 
-                    if (MessageProcessor.isAnonymous(username))
-                    {
+                    if (MessageProcessor.isAnonymous(username)) {
+
                         // Client was an anonymous user - remove record from ClientRegistry
                         clientRegistry.removeUser(username);
                         String anonLogoutBroadcastMsg = MessageProcessor.getAnonLogoutBroadcast(username, secret);
                         sessionManager.serverBroadcast(anonLogoutBroadcastMsg);
                     }
-                    else
-                    {
+                    else {
                         Integer token = clientRegistry.logoutUser(username, secret, logoutContext, Integer.MIN_VALUE);
                         if (!token.equals(Integer.MIN_VALUE)) {
                             String logoutBroadcastMsg = MessageProcessor.getLogoutBroadcast(username, secret, token);
@@ -126,7 +125,7 @@ public class Responder {
                         }
                     }
                     // Close the connection for that given client
-                    sessionManager.closeConnection(con, closeConnectionContext);
+                    sessionManager.closeConnection(con, logoutContext);
                 }
             });
             /* An activity message has been received from a client, and already checked to ensure it is valid, the client
@@ -154,8 +153,7 @@ public class Responder {
                     }
 
                     // Add message and its expected recipients to ClientRegistry and retrieve the allocated token
-                    // TODO: Properly retrieve the number of AnonUsers, and add to the message
-                    Integer msgToken = clientRegistry.addClientMsgToRegistry(user, clientMessage, loggedInUsers, 0);
+                    Integer msgToken = clientRegistry.addMsgToRegistry(user, clientMessage, loggedInUsers);
 
                     // Add message token & recipients to ACTIVITY_BROADCAST message
                     String activityBroadcastMsg = MessageProcessor.getActivityBroadcastMsg(clientMessage, loggedInUsers,
@@ -239,18 +237,22 @@ public class Responder {
             responses.put("ANON_CONFIRM", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
+
                     // Add the ClientRecord to server's client Registry, and forward through network
                     JSONObject anonRecordTmp = (JSONObject) json.get("anon_record");
                     ClientRecord newAnonRecord = new ClientRecord(anonRecordTmp);
                     String username = newAnonRecord.getUsername();
-                    ClientRegistry clientRegistry = SessionManager.getInstance().getClientRegistry();
-                    clientRegistry.addRecord(username, newAnonRecord);
+                    SessionManager sessionManager = SessionManager.getInstance();
+
+                    // Add the record to the registry and forward on the anon_confirm!
+                    sessionManager.getClientRegistry().addRecord(username, newAnonRecord);
                     SessionManager.getInstance().forwardServerMsg(con, json.toString());
                 }
             });
             responses.put("ANON_CHECK", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
+
                     // Add the ClientRecord to server's client Registry, and forward through network
                     JSONObject anonRecordTmp = (JSONObject) json.get("anon_record");
                     ClientRecord newAnonRecord = new ClientRecord(anonRecordTmp);
@@ -258,19 +260,14 @@ public class Responder {
                     String username = newAnonRecord.getUsername();
                     String secret = newAnonRecord.getSecret();
 
+                    // This server has a direct connection w/ the anon client. Broadcast ANON_CONFIRM msg.
                     if (sessionManager.clientLoggedInLocally(username, secret)) {
-                        // This server has a direct connection with the anonymous client
-                        // Broadcast an ANON_CONFIRM message through network
-                        String msg = MessageProcessor.getAnonConfirmBroadcast(anonRecordTmp);
+                        String msg = MessageProcessor.getAnonConfirm(anonRecordTmp);
                         sessionManager.serverBroadcast(msg);
                     }
-                    else
-                    {
-                        // This server does not have a direct connection with anonymous client in question
-                        // If ClientRecord for this anonymous client exists, remove record and forward message
-                        // through network
-                        ClientRegistry clientRegistry = sessionManager.getClientRegistry();
-                        clientRegistry.removeUser(username);
+                    // Not connected to anon client. Remove record from registry if it exists & forward ANON_CHECK.
+                    else {
+                        sessionManager.getClientRegistry().removeUser(username);
                         sessionManager.forwardServerMsg(con, json.toString());
                     }
                 }
@@ -290,10 +287,8 @@ public class Responder {
                     // Add message to ClientRegistry
                     ClientRegistry clientRegistry = sessionManager.getClientRegistry();
                     String sender = json.get("username").toString();
-
-                    // TODO: Determine if Message or ClientMessage, assign appropriately
-                    ClientMessage received_message = new ClientMessage(json);
-                    clientRegistry.addClientMessageToRegistry(received_message, sender);
+                    Message received_message = new Message(json);
+                    clientRegistry.addMessageToRegistry(received_message, sender);
 
                     ArrayList<String> remaining_recipients = received_message.getRemainingRecipients();
 
@@ -358,10 +353,8 @@ public class Responder {
                 @Override
                 public void execute(JSONObject json, Connection con) {
                     String user = json.get("username").toString();
-                    String loginContext = "Context: Receiving LOGOUT_BROADCAST (in Responder)";
                     SessionManager sessionManager = SessionManager.getInstance();
-                    ClientRegistry clientRegistry = sessionManager.getClientRegistry();
-                    clientRegistry.removeUser(user);
+                    sessionManager.getClientRegistry().removeUser(user);
                     sessionManager.forwardServerMsg(con, json.toString());
                 }
             });

@@ -10,35 +10,36 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class ClientRecord extends Record {
+public class ClientRecord {
 
 
+    private String username;
     private String secret;
     private Integer next_token;
     private Integer logged_in;
     private Integer received_up_to;
-    private ArrayList<ClientMessage> messages;
-    private ArrayList<ClientMessage> undeliverable_messages;
+    private ArrayList<Message> messages;
+    private ArrayList<Message> undeliverable_messages;
 
 
     public ClientRecord(String username, String secret) {
-        super(username);
+        this.username = username;
         this.logged_in = 1;
         this.secret = secret;
         this.next_token = 1;
         this.received_up_to = 0;
-        this.messages = new ArrayList<ClientMessage>();
-        this.undeliverable_messages = new ArrayList<ClientMessage>();
+        this.messages = new ArrayList<Message>();
+        this.undeliverable_messages = new ArrayList<Message>();
     }
 
     public ClientRecord(JSONObject clientRecordJson) {
-        super(clientRecordJson);
+        this.username = clientRecordJson.get("username").toString();
         this.logged_in = ((Long) clientRecordJson.get("logged_in")).intValue();
         this.secret = clientRecordJson.get("secret").toString();
         this.next_token = ((Long) clientRecordJson.get("next_token")).intValue();
         this.received_up_to = ((Long) clientRecordJson.get("received_up_to")).intValue();
 
-        Type collectionType = new TypeToken<ArrayList<ClientMessage>>(){}.getType();
+        Type collectionType = new TypeToken<ArrayList<Message>>(){}.getType();
         this.messages = MessageProcessor.getGson().fromJson(
                 ((JSONArray) clientRecordJson.get("messages")).toJSONString(),
                 collectionType);
@@ -55,21 +56,20 @@ public class ClientRecord extends Record {
     public void updateRecord(JSONObject receivedRecord) {
         updateLoggedIn(((Long) receivedRecord.get("logged_in")).intValue(), "Updating Record");
         updateReceivedUpTo(((Long) receivedRecord.get("received_up_to")).intValue());
-
-        // Update next_token!!
         updateNextToken(((Long) receivedRecord.get("next_token")).intValue());
 
         // Update Messages
-        Type collectionType = new TypeToken<ArrayList<ClientMessage>>(){}.getType();
-        ArrayList<ClientMessage> receivedMessages = MessageProcessor.getGson().fromJson(
+        Type collectionType = new TypeToken<ArrayList<Message>>(){}.getType();
+        ArrayList<Message> receivedMessages = MessageProcessor.getGson().fromJson(
                 ((JSONArray) receivedRecord.get("messages")).toJSONString(),
                 collectionType);
         if (receivedMessages != null) {
             updateMessages(receivedMessages);
         }
+
     }
 
-    private void updateMessages(ArrayList<ClientMessage> receivedMessages) {
+    private void updateMessages(ArrayList<Message> receivedMessages) {
 
         receivedMessages.forEach((msg) -> {
             boolean messageFound;
@@ -89,7 +89,7 @@ public class ClientRecord extends Record {
         });
     }
 
-    private boolean updateDeliverableMessages(ClientMessage m) {
+    private boolean updateDeliverableMessages(Message m) {
         AtomicBoolean messageFound = new AtomicBoolean(false);
         this.messages.forEach((message) -> {
             if (message.equals(m)) {
@@ -103,7 +103,7 @@ public class ClientRecord extends Record {
         return messageFound.get();
     }
 
-    private boolean updateUndeliverableMessages(ClientMessage m) {
+    private boolean updateUndeliverableMessages(Message m) {
         AtomicBoolean messageFound = new AtomicBoolean(false);
         this.undeliverable_messages.forEach((message) -> {
             if (message.equals(m)) {
@@ -139,6 +139,10 @@ public class ClientRecord extends Record {
 
     // ------------------------------ LOGIN MANAGEMENT ------------------------------
 
+    public String getUsername() {
+        return this.username;
+    }
+
     /**
      * Checks whether or not the JSONObject representing a client record has the same secret as this ClientRecord
      * @param clientRecord
@@ -172,7 +176,7 @@ public class ClientRecord extends Record {
 
         if (this.logged_in == Integer.MAX_VALUE) {
             this.logged_in = 2;
-            System.out.println("Logging In " + super.getUsername());
+            System.out.println("Logging In " + this.username);
             System.out.println(loginContext + "; this.logged_in = " + this.logged_in);
             return this.logged_in;
         }
@@ -180,10 +184,10 @@ public class ClientRecord extends Record {
             this.logged_in = newLoggedIn;
 
             if (this.logged_in % 2 == 0) {
-                System.out.println("Logging In " + super.getUsername());
+                System.out.println("Logging In " + this.username);
             }
             else {
-                System.out.println("Logging Out " + super.getUsername());
+                System.out.println("Logging Out " + this.username);
             }
             System.out.println(loginContext + "; this.logged_in = " + this.logged_in);
 
@@ -208,9 +212,9 @@ public class ClientRecord extends Record {
     // ----------------------------------- MESSAGING -----------------------------------
 
 
-    public Integer createAndAddMessage(JSONObject msg, ArrayList<String> recipients, Integer numAnonRecipients) {
+    public Integer createAndAddMessage(JSONObject msg, ArrayList<String> recipients) {
         Integer token = getNextTokenAndIncrement();
-        ClientMessage message = new ClientMessage(token, msg, recipients, numAnonRecipients);
+        Message message = new Message(token, msg, recipients);
         addMessage(message);
         return token;
     }
@@ -221,23 +225,17 @@ public class ClientRecord extends Record {
         return token;
     }
 
-    public void addMessage(Message message) {
-
-        if (message instanceof ClientMessage) {
-
-            ClientMessage msg = (ClientMessage) message;
-
-            Integer token = msg.getToken();
-            if (this.received_up_to + 1 == token) {
-                messages.add(msg);
-                Collections.sort(messages);
-                this.received_up_to = token;
-                updateDeliverableMessages();
-            }
-            else {
-                undeliverable_messages.add(msg);
-                Collections.sort(undeliverable_messages);
-            }
+    public void addMessage(Message msg) {
+        Integer token = msg.getToken();
+        if (this.received_up_to + 1 == token) {
+            messages.add(msg);
+            Collections.sort(messages);
+            this.received_up_to = token;
+            updateDeliverableMessages();
+        }
+        else {
+            undeliverable_messages.add(msg);
+            Collections.sort(undeliverable_messages);
         }
     }
 
@@ -245,8 +243,8 @@ public class ClientRecord extends Record {
      * Check that we haven't already received messages with higher tokens -> update if we have
      */
     public void updateDeliverableMessages() {
-        ArrayList<ClientMessage> nextMessages = getMessagesWithTokensAbove(this.received_up_to);
-        for (ClientMessage m : nextMessages) {
+        ArrayList<Message> nextMessages = getMessagesWithTokensAbove(this.received_up_to);
+        for (Message m : nextMessages) {
             if (m.getToken() == this.received_up_to + 1) {
                 this.received_up_to += 1;
                 undeliverable_messages.remove(m);
@@ -258,9 +256,9 @@ public class ClientRecord extends Record {
         }
     }
 
-    public ArrayList<ClientMessage> getMessagesWithTokensAbove(Integer largerThan) {
-        ArrayList<ClientMessage> returnMessages = new ArrayList<ClientMessage>();
-        for (ClientMessage m : messages) {
+    public ArrayList<Message> getMessagesWithTokensAbove(Integer largerThan) {
+        ArrayList<Message> returnMessages = new ArrayList<Message>();
+        for (Message m : messages) {
             if (m.getToken() > largerThan) {
                 returnMessages.add(m);
             }
@@ -268,15 +266,14 @@ public class ClientRecord extends Record {
         return returnMessages;
     }
 
-    public void receivedMessage(ArrayList<String> receivers, Integer token, Integer numAnonReceivers) {
+    public void receivedMessage(ArrayList<String> receivers, Integer token) {
         boolean allDelivered = false;
-        for (ClientMessage message : messages) {
+        for (Message message : messages) {
             if (message.getToken().equals(token)) {
-                allDelivered = message.receivedMessages(receivers, numAnonReceivers);
+                allDelivered = message.receivedMessages(receivers);
             }
         }
         if (allDelivered) {
-            // TODO: Anon Message Deletion
             deleteMessage(token);
         }
     }
@@ -290,12 +287,12 @@ public class ClientRecord extends Record {
      * @param recipient
      * @return
      */
-    public ClientMessage getNextMessage(String recipient) {
+    public Message getNextMessage(String recipient) {
 
         // Make sure the first message we iterate over is the first addressed to the recipient
         if (!messages.isEmpty()) {
             Collections.sort(messages);
-            for (ClientMessage m : messages) {
+            for (Message m : messages) {
                 if (m.addressedTo(recipient)) {
                     return m;
                 }
@@ -305,6 +302,38 @@ public class ClientRecord extends Record {
     }
 
 
+    // ------------------------------ COMPARING RECORDS ------------------------------
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (!ClientRecord.class.isAssignableFrom(obj.getClass())) {
+            return false;
+        }
+        final ClientRecord other = (ClientRecord) obj;
+        if ((this.username == null) ? (other.username != null) : !this.username.equals(other.username)) {
+            return false;
+        }
+        // Used if we implement a sender field
+        // if (!this.sender.equals(other.sender)) {
+        //     return false;
+        // }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 3;
+        hash = 53 * hash + (this.username != null ? this.username.hashCode() : 0);
+        // Used if we implement a sender field
+        // hash = 53 * hash + this.sender;
+        return hash;
+    }
+
+
+
+
     // ----------------------------------- Archived Methods (Unused but possibly useful in the future) ----------------
     /**
      * Returns a HashMap of <Username, Message> Pairs, the message to send to each user.
@@ -312,17 +341,16 @@ public class ClientRecord extends Record {
      * @return a HashMap of <Username, Message> Pairs, so each user has a message (if any) the server can send it.
      *         May return an empty HashMap if no messages are yet ready to send.
      */
-    public HashMap<String, ClientMessage> getNextMessages(ArrayList<String> connectedClients) {
-        HashMap<String, ClientMessage> nextMessages = new HashMap<String, ClientMessage>();
+    public HashMap<String, Message> getNextMessages(ArrayList<String> connectedClients) {
+        HashMap<String, Message> nextMessages = new HashMap<String, Message>();
 
         // Get the next message for each user, and if it's not null, store it!
         connectedClients.forEach((user) -> {
-            ClientMessage msg = getNextMessage(user);
+            Message msg = getNextMessage(user);
             if (msg != null) {
                 nextMessages.put(user, msg);
             }
         });
         return nextMessages;
     }
-
 }
