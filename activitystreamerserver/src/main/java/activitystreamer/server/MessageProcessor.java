@@ -437,6 +437,14 @@ public class MessageProcessor {
         return msg.toString();
     }
 
+    public static String getAnonLogoutBroadcast(String user, String secret) {
+        JSONObject msg = new JSONObject();
+        msg.put("command", "ANON_LOGOUT_BROADCAST");
+        msg.put("username", user);
+        msg.put("secret", secret);
+        return msg.toString();
+    }
+
     /** Creates an ACTIVITY_MESSAGE message to be sent across the network.
      * @param json The activity message
      * @return Msg the message to be sent across the network

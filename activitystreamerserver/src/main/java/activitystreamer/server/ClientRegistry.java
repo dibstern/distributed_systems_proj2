@@ -127,8 +127,9 @@ public class ClientRegistry {
         anonRecord.login(loginContext);
     }
 
-    public void logoutAnonUser(String logoutContext) {
-        anonRecord.logout(logoutContext);
+    public void logoutAnonUser(String username) {
+
+        clientRecords.remove(username);
     }
 
 
@@ -200,8 +201,6 @@ public class ClientRegistry {
             }
         });
 
-        // TODO: Add Anonymous User (if one is logged in) here
-
         return loggedInUsers;
     }
 
@@ -209,8 +208,12 @@ public class ClientRegistry {
         return clientRecords.containsKey(user);
     }
 
+
     public void removeUser(String username) {
-        clientRecords.remove(username);
+        if (clientRecords.containsKey(username))
+        {
+            clientRecords.remove(username);
+        }
     }
 
     /**

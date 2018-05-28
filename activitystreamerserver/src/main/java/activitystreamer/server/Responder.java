@@ -93,11 +93,23 @@ public class Responder {
                     String username = client.getUsername();
                     String secret = client.getSecret();
                     String logoutContext = "Context: received LOGOUT request from " + username;
-                    Integer token = clientRegistry.logoutUser(username, secret, logoutContext, Integer.MIN_VALUE);
-                    if (!token.equals(Integer.MIN_VALUE)) {
-                        String logoutBroadcastMsg = MessageProcessor.getLogoutBroadcast(username, secret, token);
-                        sessionManager.serverBroadcast(logoutBroadcastMsg);
+
+                    if (MessageProcessor.isAnonymous(username))
+                    {
+                        // Client was an anonymous user - remove record from ClientRegistry
+                        clientRegistry.removeUser(username);
+                        String anonLogoutBroadcastMsg = MessageProcessor.getAnonLogoutBroadcast(username, secret);
+                        sessionManager.serverBroadcast(anonLogoutBroadcastMsg);
                     }
+                    else
+                    {
+                        Integer token = clientRegistry.logoutUser(username, secret, logoutContext, Integer.MIN_VALUE);
+                        if (!token.equals(Integer.MIN_VALUE)) {
+                            String logoutBroadcastMsg = MessageProcessor.getLogoutBroadcast(username, secret, token);
+                            sessionManager.serverBroadcast(logoutBroadcastMsg);
+                        }
+                    }
+                    // Close the connection for that given client
                     sessionManager.closeConnection(con, closeConnectionContext);
                 }
             });
@@ -284,6 +296,18 @@ public class Responder {
                         sessionManager.forwardServerMsg(con, json.toString());
                     }
 
+                }
+            });
+            /* ... */
+            responses.put("ANON_LOGOUT_BROADCAST", new ServerCommand() {
+                @Override
+                public void execute(JSONObject json, Connection con) {
+                    String user = json.get("username").toString();
+                    String loginContext = "Context: Receiving LOGOUT_BROADCAST (in Responder)";
+                    SessionManager sessionManager = SessionManager.getInstance();
+                    ClientRegistry clientRegistry = sessionManager.getClientRegistry();
+                    clientRegistry.removeUser(user);
+                    sessionManager.forwardServerMsg(con, json.toString());
                 }
             });
             /* Server announce message received from another server. Update information about this server, then forward
