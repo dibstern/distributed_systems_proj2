@@ -353,6 +353,8 @@ public class SessionManager extends Thread {
      */
     public boolean clientLoggedInLocally(String user, String secret) {
         Connection con = getConnectionForClient(user, secret);
+        // TODO: Could return a null connection, prepare for that before using this method
+
         return checkClientLoggedIn(con);
     }
 
@@ -427,24 +429,32 @@ public class SessionManager extends Thread {
      * the username against the password. Instead just add connection to client connections hash map
      * @param c The connection a client is using
      * @param username The username supplied by the client **/
-    public void loginAnonymousClient(Connection c, String username) {
-        clientConnections.put(c, new ConnectedClient(username, null));
+    public Integer loginAnonymousClient(Connection c, String username, String secret) {
+        clientConnections.put(c, new ConnectedClient(username, secret));
         connections.remove(c);
-        String msg = MessageProcessor.getLoginSuccessMsg(username);
-        c.writeMsg(msg);
-        if (!clientRegistry.secretCorrect(username, null)) {
-            clientRegistry.addFreshClient(username, null);
-        }
 
-        // Check if there is another server client should connect to, and send getRedirectMsg message if so
-        checkRedirectClient(c, username, null);
+        clientRegistry.addFreshClient(username, secret);
+        String loginContext = "Context: Received LOGIN from Anon user, now in loginAnonymousClient (in SessionMangr).";
+        Integer token = clientRegistry.loginUser(username, secret, loginContext, Integer.MIN_VALUE);
+
+        // Broadcast the LOCK_REQUEST
+        String msg = MessageProcessor.getLockRequestMsg(username, secret);
+        serverBroadcast(msg);
+
+        // TODO: Delay sending the login success message?
+        delayThread(1000);
+
+        // TODO: Check if Anonymous clients expect this
+        msg = MessageProcessor.getLoginSuccessMsg(username);
+        c.writeMsg(msg);
+        return token;
     }
 
     /** Checks if the server knows of another server that has at least two less connections than it. If such a server
      * exists, sends a REDIRECT message with that server's hostname and port number.
      * This has been implemented to return the FIRST server that has two or less connections.
      * @param c The connection to send the message onn**/
-    public boolean checkRedirectClient(Connection c, String username, String secret) {
+    public boolean checkRedirectClient(Connection c, String username, String secret, boolean anonClient) {
         Integer logoutToken;
         String logoutBroadcastMsg;
         String msg;
@@ -453,17 +463,29 @@ public class SessionManager extends Thread {
         int load = clientConnections.size();
         boolean redirect = false;
         boolean redirectFailed = true;
+        boolean disconnect = false;
         for (ConnectedServer server : serverInfo.values()) {
             if (server.getLoad() <= load - 2) {
                 redirect = true;
                 msg = MessageProcessor.getRedirectMsg(server.getHostname(), server.getPort());
                 logoutContext = "Context: Redirecting, now in checkRedirect (in SessionManager)";
 
-                logoutToken = logoutClient(c, logoutContext);
-                if (!logoutToken.equals(Integer.MIN_VALUE)) {
-                    logoutBroadcastMsg = MessageProcessor.getLogoutBroadcast(username, secret, logoutToken);
-                    sessionManager.serverBroadcast(logoutBroadcastMsg);
-
+                if (!anonClient) {
+                    logoutToken = logoutClient(c, logoutContext);
+                    if (!logoutToken.equals(Integer.MIN_VALUE)) {
+                        logoutBroadcastMsg = MessageProcessor.getLogoutBroadcast(username, secret, logoutToken);
+                        sessionManager.serverBroadcast(logoutBroadcastMsg);
+                        disconnect = true;
+                    }
+                    else {
+                        log.debug("Failed Redirection; logoutClient failed. Trying with next server");
+                        redirectFailed = true;
+                    }
+                }
+                else {
+                    disconnect = true;
+                }
+                if (disconnect) {
                     log.info("about to call redirect message, waiting 2 secs\n");
                     delayDisconnect();
 
@@ -471,10 +493,6 @@ public class SessionManager extends Thread {
                     c.writeMsg(msg);
                     closeConnection(c, "Close " + logoutContext);
                     return true;
-                }
-                else {
-                    log.debug("Failed Redirection; logoutClient failed. Trying with next server");
-                    redirectFailed = true;
                 }
             }
         }
@@ -572,31 +590,29 @@ public class SessionManager extends Thread {
     }
 
     /**
-     * If the Client with the same username and password is stored in this server's connections, it will tell it that
-     * it has received a LOCK_ALLOWED message (setting that server as "registered" once all the required no. of
-     * LOCK_ALLOWED messages have been received) and return true,
-     *
-     * @param username The username a client is attempting to register with
-     * @param secret The corresponding secret
-     * @return True if this server is the sender of the original LOCK_REQUEST message, false otherwise
+     * Update the ConnectedClient, send a registration success message if all LOCK_ALLOWED messages have arrived.
+     * @param client
+     * @param username
+     * @param secret
      */
-    public boolean updateIfSender(String username, String secret) {
-        for (HashMap.Entry<Connection, ConnectedClient> client : clientConnections.entrySet()) {
-            ConnectedClient clientInfo = client.getValue();
-            if (clientInfo.isClient(username, secret)) {
-                Connection clientConnection = client.getKey();
-                boolean registrationComplete = clientInfo.receivedLockAllowed();
-                if (registrationComplete) {
-                    registrationSuccess(username, secret, clientConnection);
-                }
-                return true;
-            }
+    public void updateAndCompleteRegistration(ConnectedClient client, String username, String secret) {
+        boolean registrationComplete = client.receivedLockAllowed();
+        if (registrationComplete) {
+            Connection clientCon = getConnectionForClient(username, secret);
+            registrationSuccess(username, secret, clientCon);
         }
-        return false;
     }
 
 
-
+    public ConnectedClient getClientIfConnected(String username, String secret) {
+        for (HashMap.Entry<Connection, ConnectedClient> client : clientConnections.entrySet()) {
+            ConnectedClient clientInfo = client.getValue();
+            if (clientInfo.isClient(username, secret)) {
+                return clientInfo;
+            }
+        }
+        return null;
+    }
 
 
 
