@@ -329,6 +329,9 @@ public class ClientRegistry {
                 Integer token = m.getToken();
                 con.writeMsg(activityBroadcastMsg.toString());
 
+                // if (con.)
+                System.out.println("Just wrote " + activityBroadcastMsg.toString() + "to " + user);
+
                 // Record the message as sent
                 m.receivedMessage(user);
 
