@@ -1,5 +1,6 @@
 package activitystreamer;
 
+import activitystreamer.client.ClientSessionHandler;
 import activitystreamer.client.ConnectionManager;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -77,6 +78,14 @@ public class Client {
         log.info("starting client");
 
         ConnectionManager conMan = ConnectionManager.getInstance();
+
+        // Makes the client shut down gracefully, logging out before disconnecting
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            public void run() {
+                System.out.println("Executing shutdown hook");
+                conMan.getInstanceClientConnection().disconnect();
+            }
+        });
     }
 
 }

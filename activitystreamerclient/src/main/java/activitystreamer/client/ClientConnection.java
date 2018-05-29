@@ -32,6 +32,8 @@ public class ClientConnection implements Runnable  {
     private boolean open = false;
     private boolean term = false;
 
+    private static boolean logged_in;
+
     public ClientConnection() {
         connectToServer();
         open = true;
@@ -51,6 +53,7 @@ public class ClientConnection implements Runnable  {
      */
     public void logout() {
         sendMessage(ClientMessageHandler.getLogoutMsg());
+        setLoggedIn(false);
         disconnect();
     }
 
@@ -59,6 +62,10 @@ public class ClientConnection implements Runnable  {
         if (open) {
             log.info("closing connection " + Settings.socketAddress(socket));
             try {
+                if (getLoggedIn()) {
+                    sendMessage(ClientMessageHandler.getLogoutMsg());
+                    setLoggedIn(false);
+                }
                 inreader.close();
                 out.close();
                 socket.close();
@@ -136,5 +143,17 @@ public class ClientConnection implements Runnable  {
             // Close GUI here?
         }
         open = false;
+    }
+
+    public String getSocketAddress() {
+        return Settings.socketAddress(socket);
+    }
+
+    public static boolean getLoggedIn() {
+        return logged_in;
+    }
+
+    public static void setLoggedIn(boolean loggedIn) {
+        logged_in = loggedIn;
     }
 }

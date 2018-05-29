@@ -124,6 +124,7 @@ public class ClientSessionHandler {
                 @Override
                 public void execute(JSONObject json) {
                     ConnectionManager.getInstance().displayMsg(json, false);
+                    ClientConnection.setLoggedIn(true);
                 }
             });
             // Login was unsuccessful, connection has been closed by server

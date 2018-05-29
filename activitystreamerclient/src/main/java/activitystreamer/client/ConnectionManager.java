@@ -1,7 +1,11 @@
 package activitystreamer.client;
 
+import activitystreamer.util.Settings;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.simple.JSONObject;
 
+import javax.swing.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -18,6 +22,7 @@ public class ConnectionManager {
     private static ClientConnection clientConnection;
     private static ConnectionManager connectionManager;
     private TextFrame textFrame;
+    private static final Logger log = LogManager.getLogger();
 
     // Singleton Pattern
     public static ConnectionManager getInstance() {
@@ -55,10 +60,12 @@ public class ConnectionManager {
      *  Restarts the connection by shutting down the current connection thread and starting a new one.
      */
     public void restartConnection() {
+        log.info("Redirecting...");
         executor.shutdownNow();
         executor = Executors.newSingleThreadExecutor();
         clientConnection = new ClientConnection();
         executor.execute(clientConnection);
+        log.info("Reconnected to " +  getInstanceClientConnection().getSocketAddress());
     }
 
     /** Displays a given message to the GUI
