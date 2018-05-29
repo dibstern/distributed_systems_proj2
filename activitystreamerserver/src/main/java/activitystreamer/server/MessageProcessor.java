@@ -1,5 +1,6 @@
 package activitystreamer.server;
 
+import activitystreamer.util.Settings;
 import com.google.gson.Gson;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -60,6 +61,8 @@ public class MessageProcessor {
 
             // TODO: Check that this is correct
             case "AUTHENTICATION_SUCCESS":
+            case "GRANDPARENT_UPDATE":
+            case "SIBLING_UPDATE":
                 return (isValidServerAuthMsg ? null : missingFieldMsg);
             case "AUTHENTICATE":
                 return (containsSecret && isValidServerAuthMsg ? null : missingFieldMsg);
@@ -213,6 +216,8 @@ public class MessageProcessor {
             case "LOCK_DENIED":
             case "LOCK_ALLOWED":
             case "MSG_ACKS":
+            case "GRANDPARENT_UPDATE":
+            case "SIBLING_UPDATE":
             case "LOGIN_BROADCAST":
             case "LOGOUT_BROADCAST":
                 if (!serverAuthenticated) {
@@ -395,10 +400,23 @@ public class MessageProcessor {
         return msg.toString();
     }
 
+    public static String getGrandparentUpdateMsg(JSONObject grandparentRecordJson) {
+        JSONObject msg = new JSONObject();
+        msg.put("command", "GRANDPARENT_UPDATE");
+        msg.put("new_grandparent", grandparentRecordJson);
+        return msg.toString();
+    }
+
+    public static String getSiblingUpdateMsg(JSONObject siblingRecordJson) {
+        JSONObject msg = new JSONObject();
+        msg.put("command", "SIBLING_UPDATE");
+        msg.put("new_sibling", siblingRecordJson);
+        return msg.toString();
+    }
+
     public static String getAuthenticationSuccessMsg(JSONObject clientRecordsJson) {
         JSONObject msg = new JSONObject();
         msg.put("command", "AUTHENTICATION_SUCCESS");
-
         // Adds all mappings in clientRecordsJson to msg (only "registry" is mapped to a value)
         msg.putAll(clientRecordsJson);
         return msg.toString();

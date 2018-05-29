@@ -1,5 +1,7 @@
 package activitystreamer.server;
 
+import org.json.simple.JSONObject;
+
 import java.util.ArrayList;
 
 /**
@@ -21,9 +23,21 @@ public class ServerRegistry {
         this.siblingRoot = sibling;
     }
 
+    private ConnectedServer createNewRecord(JSONObject record)
+    {
+        String id = record.get("id").toString();
+        String hostname = record.get("hostname").toString();
+        int port = (int) record.get("port");
+        return new ConnectedServer(id, hostname, port);
+    }
+
     // A child server has crashed -- remove from ArrayList
     public void removeChildConnection(ConnectedServer child) {
         childServers.remove(child);
+    }
+
+    public void addChildConnection(ConnectedServer child) {
+        childServers.add(child);
     }
 
     // Set the first child server in the ArrayList as the designated child root
@@ -44,16 +58,16 @@ public class ServerRegistry {
         return this.siblingRoot;
     }
 
-    public void setGrandparent(ConnectedServer newGrandparent) {
-        this.grandparent = newGrandparent;
+    public void setGrandparent(JSONObject newGrandparent) {
+        this.grandparent = createNewRecord(newGrandparent);
     }
 
-    public void setParent(ConnectedServer newParent) {
-        this.parent = newParent;
+    public void setParent(JSONObject newParent) {
+        this.parent = createNewRecord(newParent);
     }
 
-    public void setSiblingRoot(ConnectedServer newSiblingRoot) {
-        this.siblingRoot = newSiblingRoot;
+    public void setSiblingRoot(JSONObject newSiblingRoot ) {
+        this.siblingRoot = createNewRecord(newSiblingRoot);
     }
 
 

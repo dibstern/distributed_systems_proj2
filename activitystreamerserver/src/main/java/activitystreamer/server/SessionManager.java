@@ -23,6 +23,7 @@ public class SessionManager extends Thread {
     private static ArrayList<Connection> serverConnections;
     private static HashMap<Connection, ConnectedClient> clientConnections;
     private static HashMap<String, ConnectedServer> serverInfo;
+    private static ServerRegistry serverRegistry;
     private static boolean term = false;
     private static Listener listener;
     private static String serverId;
@@ -56,6 +57,9 @@ public class SessionManager extends Thread {
 
         // Store information about all know clients in a system
         clientRegistry = new ClientRegistry();
+
+        // Store information about servers we have a direct connection to
+        serverRegistry = new ServerRegistry(null, null, null);
 
         // Set server ID by randomly generating a string
         serverId = Settings.nextSecret();
@@ -297,6 +301,7 @@ public class SessionManager extends Thread {
         else {
             // Server supplied correct secret, remove from generic "holding" connections array and add to server
             // connections array
+            // Also add this server to our list of child servers
             connections.remove(c);
             serverConnections.add(c);
             serverAuthenticateSuccess(c);
@@ -767,6 +772,10 @@ public class SessionManager extends Thread {
      */
     public ClientRegistry getClientRegistry() {
         return this.clientRegistry;
+    }
+
+    public ServerRegistry getServerRegistry() {
+        return this.serverRegistry;
     }
 
     /**

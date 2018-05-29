@@ -230,6 +230,24 @@ public class Responder {
                     SessionManager.getInstance().getClientRegistry().updateRecords(registry);
                 }
             });
+            /* ... */
+            responses.put("GRANDPARENT_UPDATE", new ServerCommand() {
+                @Override
+                public void execute(JSONObject json, Connection con) {
+                    ServerRegistry serverRegistry = SessionManager.getInstance().getServerRegistry();
+                    JSONObject grandparentRecord = (JSONObject) json.get("new_grandparent");
+                    serverRegistry.setGrandparent(grandparentRecord);
+                }
+            });
+            /* ... */
+            responses.put("SIBLING_UPDATE", new ServerCommand() {
+                @Override
+                public void execute(JSONObject json, Connection con) {
+                    ServerRegistry serverRegistry = SessionManager.getInstance().getServerRegistry();
+                    JSONObject siblingRecord = (JSONObject) json.get("new_sibling");
+                    serverRegistry.setSiblingRoot(siblingRecord);
+                }
+            });
             responses.put("ANON_CONFIRM", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
