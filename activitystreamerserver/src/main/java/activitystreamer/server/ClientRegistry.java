@@ -370,11 +370,8 @@ public class ClientRegistry {
      */
     public void registerAcks(HashMap<Integer, ArrayList<String>> acks, String sender) {
 
-        if (!userExists(sender)) {
-            // System.out.print("");
-        }
-        else {
         // Report the messages as having been sent
+        if (userExists(sender)) {
             ClientRecord senderRecord = getClientRecord(sender);
             acks.forEach((token, recipients) -> senderRecord.receivedMessage(recipients, token));
         }

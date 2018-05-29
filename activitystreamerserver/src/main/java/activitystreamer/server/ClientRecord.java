@@ -55,68 +55,53 @@ public class ClientRecord {
      */
     public void updateRecord(JSONObject receivedRecord) {
         updateLoggedIn(((Long) receivedRecord.get("logged_in")).intValue(), "Updating Record");
-        updateReceivedUpTo(((Long) receivedRecord.get("received_up_to")).intValue());
         updateNextToken(((Long) receivedRecord.get("next_token")).intValue());
 
         // Update Messages
         Type collectionType = new TypeToken<ArrayList<Message>>(){}.getType();
-        ArrayList<Message> receivedMessages = MessageProcessor.getGson().fromJson(
+        ArrayList<Message> receivedDeliverableMessages = MessageProcessor.getGson().fromJson(
                 ((JSONArray) receivedRecord.get("messages")).toJSONString(),
                 collectionType);
-        if (receivedMessages != null) {
-            updateMessages(receivedMessages);
+        if (receivedDeliverableMessages != null) {
+            updateMessages(receivedDeliverableMessages);
         }
-
+        ArrayList<Message> receivedUndeliverableMessages = MessageProcessor.getGson().fromJson(
+                ((JSONArray) receivedRecord.get("undeliverable_messages")).toJSONString(),
+                collectionType);
+        if (receivedDeliverableMessages != null) {
+            updateMessages(receivedUndeliverableMessages);
+        }
     }
 
     private void updateMessages(ArrayList<Message> receivedMessages) {
+        // 1. If we don't have a message and its token is > this.received_up_to, add it to our messages
+        // 2. Update recipients lists
 
         receivedMessages.forEach((msg) -> {
-            boolean messageFound;
-
-            // Attempt to update deliverable messages if it's deliverable
-            if (msg.getToken() <= this.received_up_to) {
-                messageFound = updateDeliverableMessages(msg);
-            }
-            // Otherwise attempt to update undeliverable messages
-            else {
-                messageFound = updateUndeliverableMessages(msg);
-            }
-            // If we haven't found the message in our records, it's a new message we haven't yet received. Add it!
-            if (!messageFound) {
+            if (!undeliverable_messages.contains(msg) && msg.getToken() > this.received_up_to) {
                 addMessage(msg);
             }
+            // Otherwise, we have the message (unless we have already sent it to all recipients) and we can update its
+            // recipients list (deleting recipients not included on the received message)
+            else {
+                updateMessage(msg);
+            }
         });
     }
 
-    private boolean updateDeliverableMessages(Message m) {
+    private boolean updateMessage(Message msg) {
         AtomicBoolean messageFound = new AtomicBoolean(false);
         this.messages.forEach((message) -> {
-            if (message.equals(m)) {
+            if (message.equals(msg)) {
                 messageFound.set(true);
-                boolean allDelivered = message.updateRecipients(m.getRemainingRecipients());
+                boolean allDelivered = message.updateRecipients(msg.getRemainingRecipients());
                 if (allDelivered) {
-                    messages.remove(message);
+                    this.messages.remove(message);
                 }
             }
         });
         return messageFound.get();
     }
-
-    private boolean updateUndeliverableMessages(Message m) {
-        AtomicBoolean messageFound = new AtomicBoolean(false);
-        this.undeliverable_messages.forEach((message) -> {
-            if (message.equals(m)) {
-                messageFound.set(true);
-                boolean allDelivered = message.updateRecipients(m.getRemainingRecipients());
-                if (allDelivered) {
-                    this.undeliverable_messages.remove(message);
-                }
-            }
-        });
-        return messageFound.get();
-    }
-
 
     private void updateNextToken(Integer receivedNextToken) {
         if (receivedNextToken.equals(Integer.MAX_VALUE) || receivedNextToken < 1) {
@@ -124,16 +109,6 @@ public class ClientRecord {
         }
         else if (next_token < receivedNextToken) {
             next_token = receivedNextToken;
-        }
-    }
-
-    private void updateReceivedUpTo(Integer latestReceivedUpTo) {
-
-        if (latestReceivedUpTo.equals(Integer.MAX_VALUE) || latestReceivedUpTo < 0) {
-            this.received_up_to = 1;
-        }
-        else if (this.received_up_to < latestReceivedUpTo) {
-            this.received_up_to = latestReceivedUpTo;
         }
     }
 
@@ -220,18 +195,28 @@ public class ClientRecord {
     }
 
     public Integer getNextTokenAndIncrement() {
-        this.next_token += 1;
+        if (this.next_token.equals(Integer.MAX_VALUE)) {
+            this.next_token = 1;
+        }
+        else {
+            this.next_token += 1;
+        }
         int token = this.next_token - 1;
         return token;
     }
 
     public void addMessage(Message msg) {
         Integer token = msg.getToken();
-        if (this.received_up_to + 1 == token) {
+
+        if (this.received_up_to.equals(Integer.MAX_VALUE) && token.equals(1)) {
+            this.received_up_to = 1;
             messages.add(msg);
-            Collections.sort(messages);
-            this.received_up_to = token;
-            updateDeliverableMessages();
+            // TODO: Something else here?
+        }
+
+        else if (this.received_up_to + 1 == token) {
+            messages.add(msg);
+            updateDeliverableMsgs(token);
         }
         else {
             undeliverable_messages.add(msg);
@@ -242,28 +227,17 @@ public class ClientRecord {
     /**
      * Check that we haven't already received messages with higher tokens -> update if we have
      */
-    public void updateDeliverableMessages() {
-        ArrayList<Message> nextMessages = getMessagesWithTokensAbove(this.received_up_to);
-        for (Message m : nextMessages) {
-            if (m.getToken() == this.received_up_to + 1) {
-                this.received_up_to += 1;
-                undeliverable_messages.remove(m);
-                messages.add(m);
-            }
-            else {
-                break;
+    private void updateDeliverableMsgs(Integer deliverableToken) {
+        received_up_to = deliverableToken;
+        ArrayList<Integer> tokensToMove = new ArrayList<Integer>();
+        for (Message m : this.undeliverable_messages) {
+            if (m.getToken() <= received_up_to) {
+                tokensToMove.add(m.getToken());
+                this.messages.add(m);
             }
         }
-    }
-
-    public ArrayList<Message> getMessagesWithTokensAbove(Integer largerThan) {
-        ArrayList<Message> returnMessages = new ArrayList<Message>();
-        for (Message m : messages) {
-            if (m.getToken() > largerThan) {
-                returnMessages.add(m);
-            }
-        }
-        return returnMessages;
+        this.undeliverable_messages.removeIf((m) -> tokensToMove.contains(m.getToken()));
+        Collections.sort(this.messages);
     }
 
     public void receivedMessage(ArrayList<String> receivers, Integer token) {
