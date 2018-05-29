@@ -136,11 +136,17 @@ public class Responder {
                 @Override
                 public void execute(JSONObject json, Connection con) {
 
-                    // Initial Setup
-                    String user = json.get("username").toString();
                     SessionManager sessionManager = SessionManager.getInstance();
                     ClientRegistry clientRegistry = sessionManager.getClientRegistry();
 
+                    // Initial Setup
+                    String user = json.get("username").toString();
+
+                    if (MessageProcessor.isAnonymous(user)) {
+                        ConnectedClient conClient = sessionManager.getConnectedClient(con);
+                        user = conClient.getUsername();
+                    }
+                    
                     // `Process` the message
                     JSONObject clientMessage = MessageProcessor.processActivityMessage(json);
 
