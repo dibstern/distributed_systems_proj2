@@ -484,7 +484,7 @@ public class MessageProcessor {
         return msg.toString();
     }
 
-    public static JSONObject processActivityMessage(JSONObject activityMsg, String user) {
+    public static JSONObject processActivityMessage(JSONObject activityMsg, String user, String secret) {
 
         String command = activityMsg.get("command").toString();
         JSONObject activityMessage = (JSONObject) activityMsg.get("activity");
@@ -493,9 +493,7 @@ public class MessageProcessor {
         // Create new processed message
         JSONObject processedMsg = new JSONObject();
         processedMsg.put("username", user);
-        if (!isAnonymous(user)) {
-            processedMsg.put("secret", activityMsg.get("secret").toString());
-        }
+        processedMsg.put("secret", secret);
         processedMsg.put("command", command);
         processedMsg.put("activity", activityMessage);
 

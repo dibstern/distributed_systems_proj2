@@ -141,14 +141,19 @@ public class Responder {
 
                     // Initial Setup
                     String user = json.get("username").toString();
+                    String secret;
 
                     if (MessageProcessor.isAnonymous(user)) {
                         ConnectedClient conClient = sessionManager.getConnectedClient(con);
                         user = conClient.getUsername();
+                        secret = conClient.getSecret();
+                    }
+                    else {
+                        secret = json.get("secret").toString();
                     }
 
                     // `Process` the message
-                    JSONObject clientMessage = MessageProcessor.processActivityMessage(json, user);
+                    JSONObject clientMessage = MessageProcessor.processActivityMessage(json, user, secret);
 
                     // Retrieve the logged in users (known to the clientRegistry at this time)
                     ArrayList<String> loggedInUsers = clientRegistry.getLoggedInUsers();
