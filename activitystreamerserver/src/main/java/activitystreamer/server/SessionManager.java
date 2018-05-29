@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -30,6 +31,7 @@ public class SessionManager extends Thread {
     private static Responder responder;
     private static ClientRegistry clientRegistry;
     private final static int REDIRECT_DELAY = 2000; // milliseconds (= 2 seconds)
+    private static ConcurrentLinkedQueue<String> deliveries;
 
     protected static SessionManager sessionManager = null;
 
@@ -51,6 +53,7 @@ public class SessionManager extends Thread {
         // To store connected Servers & Clients.
         serverConnections = new ArrayList<Connection>();
         clientConnections = new HashMap<Connection, ConnectedClient>();
+        deliveries = new ConcurrentLinkedQueue<String>();
 
         // To store information about all know servers in a system
         serverInfo = new HashMap<String, ConnectedServer>();
@@ -178,7 +181,16 @@ public class SessionManager extends Thread {
         while (!term) {
             // do something with 5 second intervals in between
             try {
-                Thread.sleep(Settings.getActivityInterval());
+                Thread.sleep(Settings.getActivityInterval() / 5);
+                makeDeliveries();
+                Thread.sleep(Settings.getActivityInterval() / 5);
+                makeDeliveries();
+                Thread.sleep(Settings.getActivityInterval() / 5);
+                makeDeliveries();
+                Thread.sleep(Settings.getActivityInterval() / 5);
+                makeDeliveries();
+                Thread.sleep(Settings.getActivityInterval() / 5);
+                makeDeliveries();
             }
             catch (InterruptedException e) {
                 log.info("received an interrupt, system is shutting down");
@@ -757,6 +769,10 @@ public class SessionManager extends Thread {
         return clientConnections.get(con);
     }
 
+    public boolean clientStillConnected(Connection con) {
+        return clientConnections.containsKey(con);
+    }
+
 
     //
     // MISC
@@ -804,12 +820,34 @@ public class SessionManager extends Thread {
         return connectedClients;
     }
 
+    public HashMap<String, Connection> getClientConnections() {
+        HashMap<String, Connection> connectedClients = new HashMap<String, Connection>();
+        clientConnections.forEach((con, client) -> {
+            String conUsername = client.getUsername();
+            connectedClients.put(conUsername, con);
+        });
+        return connectedClients;
+    }
+
     public static void logDebug(String msg) {
         log.debug(msg);
     }
 
     public static void logInfo(String msg) {
         log.info(msg);
+    }
+
+    public void scheduleDelivery(String sender) {
+        deliveries.add(sender);
+    }
+
+    public void makeDeliveries() {
+        while (!deliveries.isEmpty()) {
+            JSONObject ackMsg = clientRegistry.messageFlush(getClientConnections(), deliveries.poll());
+            if (ackMsg != null) {
+                serverBroadcast(ackMsg.toString());
+            }
+        }
     }
 
 

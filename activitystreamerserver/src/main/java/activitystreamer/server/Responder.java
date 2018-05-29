@@ -157,16 +157,7 @@ public class Responder {
                     sessionManager.serverBroadcast(activityBroadcastMsg);
 
                     // Retrieve client connections matching the usernames & passwords of loggedInUsers
-                    HashMap<String, Connection> receiverConnections =
-                            sessionManager.getClientConnections(clientRegistry.getClientCredentials(loggedInUsers));
-
-                    // Send all msgs possible from this sender (all queued msgs first) to connected clients
-                    JSONObject ackMessage = clientRegistry.messageFlush(receiverConnections, user);
-
-                    // Send the ACKs to all servers!
-                    if (ackMessage != null) {
-                        sessionManager.serverBroadcast(ackMessage.toString());
-                    }
+                    sessionManager.scheduleDelivery(user);
 
                     // Send back an ACTIVITY_MESSAGE to the sender, so it can display it on its GUI
                     con.writeMsg(MessageProcessor.cleanActivityMessage(clientMessage).toString());
@@ -303,18 +294,7 @@ public class Responder {
                     String sender = json.get("username").toString();
                     Message received_message = new Message(json);
                     clientRegistry.addMessageToRegistry(received_message, sender);
-
-                    ArrayList<String> remaining_recipients = received_message.getRemainingRecipients();
-
-                    // Retrieve client connections matching the usernames & passwords of loggedInUsers
-                    HashMap<String, Connection> receiverConnections = sessionManager.getClientConnections(
-                            clientRegistry.getClientCredentials(remaining_recipients));
-
-                    // Send all waiting messages, if appropriate
-                    JSONObject ackMsg = clientRegistry.messageFlush(receiverConnections, sender);
-                    if (ackMsg != null) {
-                        sessionManager.serverBroadcast(ackMsg.toString());
-                    }
+                    sessionManager.scheduleDelivery(sender);
                 }
             });
             /* ... */
