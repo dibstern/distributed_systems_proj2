@@ -223,8 +223,9 @@ public class Responder {
                 @Override
                 public void execute(JSONObject json, Connection con) {
                     String parentHost = json.get("hostname").toString();
-                    int port = (int) json.get("port");
-                    SessionManager.getInstance().getServerRegistry().setParent(parentHost, port);
+                    int port = ((Long) json.get("port")).intValue();
+                    String id = json.get("id").toString();
+                    SessionManager.getInstance().getServerRegistry().setParent(id, parentHost, port);
                     JSONObject grandparent = (JSONObject) json.get("grandparent");
                     SessionManager.getInstance().getServerRegistry().setSiblingRoot(grandparent);
                     JSONObject sibling = (JSONObject) json.get("sibling");

@@ -18,11 +18,6 @@ public class ConnectedServer implements Comparable<ConnectedServer> {
         this.port = port;
     }
 
-    public ConnectedServer(String hostname, int port) {
-        this.hostname = hostname;
-        this.port = port;
-    }
-
     public void setLoad(int load) {
         this.load = load;
     }

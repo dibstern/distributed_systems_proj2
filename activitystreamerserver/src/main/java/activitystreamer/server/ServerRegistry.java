@@ -67,7 +67,7 @@ public class ServerRegistry {
         this.grandparent = createNewRecord(newGrandparent);
     }
 
-    public void setParent(String hostname, int port) {
+    public void setParent(String id, String hostname, int port) {
         this.parent = new ConnectedServer(hostname, port);
     }
 
