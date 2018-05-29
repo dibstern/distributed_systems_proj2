@@ -79,6 +79,8 @@ public class SessionManager extends Thread {
         }
         // Initiate a connection with a remote server, if remote hostname is provided
         initiateConnection();
+
+        // Start the server
         start();
     }
 
@@ -229,7 +231,7 @@ public class SessionManager extends Thread {
         if (clientConnections.containsKey(c)) {
             String loginContext = closeContext + ". Logout Context: Received an invalid message from " +
                     getConnectedClient(c).getUsername() + ".";
-            logoutClient(c, loginContext, true, true);
+            logoutClient(c, loginContext, true, true, null);
         }
         return true;
     }
@@ -436,7 +438,7 @@ public class SessionManager extends Thread {
         // Send login success message (Registered & Correct combo) & check for redirection
         if (logged_in) {
             String loginContext = "Context: Received LOGIN, now in loginClient (in SessionManager)";
-            Integer token = clientRegistry.loginUser(username, secret, loginContext, Integer.MIN_VALUE);
+            Integer token = clientRegistry.logUser(true, username, secret, loginContext, Integer.MIN_VALUE);
 
             String msg = MessageProcessor.getLoginSuccessMsg(username);
             c.writeMsg(msg);
@@ -461,7 +463,7 @@ public class SessionManager extends Thread {
 
         clientRegistry.addFreshClient(username, secret);
         String loginContext = "Context: Received LOGIN from Anon user, now in loginAnonymousClient (in SessionMangr).";
-        Integer token = clientRegistry.loginUser(username, secret, loginContext, Integer.MIN_VALUE);
+        Integer token = clientRegistry.logUser(true, username, secret, loginContext, Integer.MIN_VALUE);
 
         // Broadcast the LOCK_REQUEST
         String msg = MessageProcessor.getLockRequestMsg(username, secret);
@@ -482,25 +484,27 @@ public class SessionManager extends Thread {
         String msg;
         String logoutContext;
 
-        int load = clientConnections.size();
+        int load = clientConnections.size() + connections.size();
         boolean redirect = false;
-        boolean logoutFailed = false;
+        boolean logoutSuccess = false;
         boolean disconnect = false;
         for (ConnectedServer server : serverInfo.values()) {
-            if ((anonClient && server.getLoad() <= load - 1) || !anonClient && server.getLoad() <= load - 2) {
+            if (server.getLoad() <= load - 2) {
                 redirect = true;
                 msg = MessageProcessor.getRedirectMsg(server.getHostname(), server.getPort());
                 logoutContext = "Context: Redirecting, now in checkRedirect (in SessionManager)";
 
                 if (!anonClient) {
                     boolean doDisconnect = false;
-                    logoutFailed = logoutClient(c, logoutContext, doDisconnect, true);
-                    if (!logoutFailed) {
+                    logoutSuccess = logoutClient(c, logoutContext, doDisconnect, true, null);
+                    if (logoutSuccess) {
                         disconnect = true;
+                        c.setHasLoggedOut(true);
                     }
                 }
                 else {
                     disconnect = true;
+                    c.setHasLoggedOut(true);
                 }
                 if (disconnect) {
                     log.info("about to call redirect message, waiting 2 secs\n");
@@ -513,7 +517,7 @@ public class SessionManager extends Thread {
                 }
             }
         }
-        if (redirect && logoutFailed) {
+        if (redirect && !logoutSuccess) {
             log.debug("Completely Failed Redirection; logoutClient failed.");
         }
         return false;
@@ -692,7 +696,7 @@ public class SessionManager extends Thread {
             ClientRecord record = getClientRegistry().getClientRecord(username);
             if (record.loggedIn()) {
                 String logoutContext = "Updating Client Registry w/ logout out of disconnected Client";
-                clientRegistry.logoutUser(username, secret, logoutContext, Integer.MIN_VALUE);
+                clientRegistry.logUser(false, username, secret, logoutContext, Integer.MIN_VALUE);
             }
         }
     }
@@ -727,26 +731,36 @@ public class SessionManager extends Thread {
         }
     }
 
-    public boolean logoutClient(Connection con, String logoutContext, boolean disconnect, boolean bcast) {
+    public boolean logoutClient(Connection con, String logoutContext, boolean disconnect, boolean bcast, Integer optionalToken) {
         if (conIsClient(con)) {
             ConnectedClient client = getConnectedClient(con);
             String username = client.getUsername();
             String secret = client.getSecret();
             if (MessageProcessor.isAnonymous(username)) {
                 logoutAnonClient(con, logoutContext, username, secret, bcast);
+                con.setHasLoggedOut(true);
                 return true;
             }
             else {
-                Integer logoutToken = clientRegistry.logoutUser(username, secret, logoutContext, Integer.MIN_VALUE);
+                Integer tokenUsed;
+                if (optionalToken == null) {
+                    tokenUsed = Integer.MIN_VALUE;
+                }
+                else {
+                    tokenUsed = optionalToken;
+                }
+                Integer logoutToken = clientRegistry.logUser(false, username, secret, logoutContext, tokenUsed);
                 if (!logoutToken.equals(Integer.MIN_VALUE) && bcast) {
                     String logoutBroadcastMsg = MessageProcessor.getLogoutBroadcast(username, secret, logoutToken);
                     serverBroadcast(logoutBroadcastMsg);
-                    return true;
+                    con.setHasLoggedOut(true);
                 }
             }
             if (disconnect) {
+                con.setHasLoggedOut(true);
                 closeConnection(con, logoutContext);
             }
+            return true;
         }
         return false;
     }
@@ -758,6 +772,26 @@ public class SessionManager extends Thread {
             String anonLogoutBroadcastMsg = MessageProcessor.getAnonLogoutBroadcast(username, secret);
             sessionManager.serverBroadcast(anonLogoutBroadcastMsg);
         }
+    }
+
+    /**
+     * Only use in response to an ANON_LOGOUT_BROADCAST
+     * @param user
+     */
+    public void logoutAnonClient(String user) {
+        clientRegistry.removeUser(user);
+        clientRegistry.clearRecipientFromAllMsgs(user);
+    }
+
+    /**
+     * Only use in response to a LOGOUT_BROADCAST
+     * @param user
+     * @param secret
+     * @param logoutContext
+     * @param optionalToken
+     */
+    public void logoutRegisteredClient(String user, String secret, String logoutContext, Integer optionalToken) {
+        Integer logoutToken = clientRegistry.logUser(false, user, secret, logoutContext, optionalToken);
     }
 
 

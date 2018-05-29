@@ -76,6 +76,8 @@ public class Responder {
                             sessionManager.serverBroadcast(MessageProcessor.getLoginBroadcast(user, secret, token));
                         }
                         // Check if client should be redirected to another server
+                        // TODO: Check if this can be removed
+                        sessionManager.delayThread(500);
                         boolean redirected = sessionManager.checkRedirectClient(con, false);
 
                         // If not redirected, send the user all of the messages that are waiting for them
@@ -107,7 +109,7 @@ public class Responder {
                     String username = client.getUsername();
                     String logoutContext = closeConnectionContext + ". Context: received LOGOUT request from " + username;
 
-                    sessionManager.logoutClient(con, logoutContext, true, true);
+                    sessionManager.logoutClient(con, logoutContext, true, true, null);
                 }
             });
             /* An activity message has been received from a client, and already checked to ensure it is valid, the client
@@ -198,7 +200,10 @@ public class Responder {
                     ClientRegistry clientRegistry = sessionManager.getClientRegistry();
                     String logoutContext = closeConnectionContext + ". Logging out user that sent it.";
 
-                    sessionManager.logoutClient(con, logoutContext, true, true);
+                    boolean wasClient = sessionManager.logoutClient(con, logoutContext, true, true, null);
+                    if (!wasClient) {
+                        sessionManager.closeConnection(con, "Context: Received INVALID_MESSAGE");
+                    }
                 }
             });
 
@@ -322,7 +327,7 @@ public class Responder {
                     String loginContext = "Context: receiving LOGIN_BROADCAST (in Responder)";
 
                     ClientRegistry clientRegistry = SessionManager.getInstance().getClientRegistry();
-                    clientRegistry.loginUser(user, secret, loginContext, loginRequestToken);
+                    clientRegistry.logUser(true, user, secret, loginContext, loginRequestToken);
                 }
             });
             /* ... */
@@ -331,9 +336,11 @@ public class Responder {
                 public void execute(JSONObject json, Connection con) {
                     String logoutContext = "Context: Receiving LOGOUT_BROADCAST (in Responder)";
                     SessionManager sessionManager = SessionManager.getInstance();
-                    sessionManager.logoutClient(con, logoutContext, false, false);
+                    Integer logoutRequestToken = ((Long) json.get("token")).intValue();
+                    String user = json.get("username").toString();
+                    String secret = json.get("secret").toString();
+                    sessionManager.logoutRegisteredClient(user, secret, logoutContext, logoutRequestToken);
                     sessionManager.forwardServerMsg(con, json.toString());
-
                 }
             });
             /* ... */
@@ -342,8 +349,8 @@ public class Responder {
                 public void execute(JSONObject json, Connection con) {
                     String user = json.get("username").toString();
                     SessionManager sessionManager = SessionManager.getInstance();
-                    String logoutContext = "Context: Received ANON_LOGOUT_BROADCAST for " + user;
-                    sessionManager.logoutClient(con, logoutContext, false, false);
+                    // String logoutContext = "Context: Received ANON_LOGOUT_BROADCAST for " + user;
+                    sessionManager.logoutAnonClient(user);
                     sessionManager.forwardServerMsg(con, json.toString());
                 }
             });

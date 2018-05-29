@@ -126,6 +126,15 @@ public class ClientRegistry {
         return record.sameSecret(secret);
     }
 
+    public synchronized Integer logUser(boolean in, String user, String secret, String loginContext, Integer optionalToken) {
+        if (in) {
+            return loginUser(user, secret, loginContext, optionalToken);
+        }
+        else {
+            return logoutUser(user, secret, loginContext, optionalToken);
+        }
+    }
+
 
     public Integer loginUser(String user, String secret, String loginContext, Integer optionalToken) {
         int tokenSent = setLogin(user, loginContext, true, optionalToken);
@@ -289,13 +298,15 @@ public class ClientRegistry {
             Integer token = m.getToken();
             con.writeMsg(activityBroadcastMsg.toString());
 
-            // Record the message as sent
-            m.receivedMessage(recipient);
+            if (SessionManager.getInstance().clientStillConnected(con)) {
+                // Record the message as sent
+                m.receivedMessage(recipient);
 
-            // Add an ACK
-            ArrayList<String> users = new ArrayList<String>();
-            users.add(recipient);
-            acks.put(token, users);
+                // Add an ACK
+                ArrayList<String> users = new ArrayList<String>();
+                users.add(recipient);
+                acks.put(token, users);
+            }
 
             // Attempt to retrieve another message
             m = senderRecord.getNextMessage(recipient);
@@ -332,24 +343,29 @@ public class ClientRegistry {
                 // Send the message
                 JSONObject activityBroadcastMsg = MessageProcessor.cleanClientMessage(m.getClientMessage());
                 Integer token = m.getToken();
+
                 con.writeMsg(activityBroadcastMsg.toString());
-
-                // if (con.)
                 System.out.println("Just wrote " + activityBroadcastMsg.toString() + "to " + user);
+                SessionManager.getInstance().delayThread(2000);
+                if (con.isOpen()) {
+                    // Record the message as sent
+                    m.receivedMessage(user);
 
-                // Record the message as sent
-                m.receivedMessage(user);
-
-                // Add an ACK
-                if (!acks.containsKey(token)) {
-                    ArrayList<String> users = new ArrayList<String>();
-                    users.add(user);
-                    acks.put(token, users);
+                    // Add an ACK
+                    if (!acks.containsKey(token)) {
+                        ArrayList<String> users = new ArrayList<String>();
+                        users.add(user);
+                        acks.put(token, users);
+                    }
+                    else {
+                        acks.get(token).add(user);
+                    }
+                    m = senderRecord.getNextMessage(user);
                 }
+                // If the connection is closed, don't send
                 else {
-                    acks.get(token).add(user);
+                    m = null;
                 }
-                m = senderRecord.getNextMessage(user);
             }
         });
 
@@ -399,7 +415,7 @@ public class ClientRegistry {
 
     // ------------------------------ GENERAL GETTERS & SETTERS ------------------------------
 
-    public ClientRecord getClientRecord(String user) {
+    public synchronized ClientRecord getClientRecord(String user) {
 
         try {
             ClientRecord record = clientRecords.get(user);

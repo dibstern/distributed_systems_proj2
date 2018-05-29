@@ -25,6 +25,7 @@ public class Connection extends Thread {
     private boolean open = false;
     private Socket socket;
     private boolean term = false;
+    private boolean hasLoggedOut;
 
     private static final boolean DEBUG = true;
     private static final boolean PRINT_SERVER_STATUS = false;
@@ -37,6 +38,7 @@ public class Connection extends Thread {
         outwriter = new PrintWriter(out, true);
         this.socket = socket;
         open = true;
+        hasLoggedOut = false;
         start();
     }
 
@@ -85,13 +87,25 @@ public class Connection extends Thread {
         if (open) {
             log.info("closing connection " + Settings.socketAddress(socket));
             try {
-                term = true;
-                inreader.close();
-                out.close();
+                try {
+                    if (!hasLoggedOut) {
+                        writeMsg(MessageProcessor.getInvalidMessage("Closing Connection"));
+                    }
+                }
+                catch (Exception e) {
+                    // do nothing
+                }
+                finally {
+                    term = true;
+                    inreader.close();
+                    out.close();
+                    open = false;
+                }
             }
             catch (IOException e) {
                 // already closed?
                 log.error("received exception closing the connection " + Settings.socketAddress(socket) + ": " + e);
+                open = false;
             }
         }
     }
@@ -129,4 +143,13 @@ public class Connection extends Thread {
         }
         open = false;
     }
+
+    public boolean isOpen() {
+        return this.open;
+    }
+
+    public void setHasLoggedOut(boolean loggedOut) {
+        this.hasLoggedOut = loggedOut;
+    }
+
 }
