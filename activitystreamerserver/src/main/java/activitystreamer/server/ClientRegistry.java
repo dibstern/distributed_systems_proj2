@@ -285,7 +285,7 @@ public class ClientRegistry {
         while (m != null) {
 
             // Send the message
-            JSONObject activityBroadcastMsg = m.getClientMessage();
+            JSONObject activityBroadcastMsg = MessageProcessor.cleanClientMessage(m.getClientMessage());
             Integer token = m.getToken();
             con.writeMsg(activityBroadcastMsg.toString());
 
@@ -330,7 +330,7 @@ public class ClientRegistry {
             while (m != null) {
 
                 // Send the message
-                JSONObject activityBroadcastMsg = m.getClientMessage();
+                JSONObject activityBroadcastMsg = MessageProcessor.cleanClientMessage(m.getClientMessage());
                 Integer token = m.getToken();
                 con.writeMsg(activityBroadcastMsg.toString());
 

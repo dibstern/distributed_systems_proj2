@@ -423,9 +423,10 @@ public class SessionManager extends Thread {
         }
     }
 
-    /** Log in a client that is anonymous, and therefore does not require a secret.
-     * This client is not stored in the clientRegistry hash map as we never need to check
-     * the username against the password. Instead just add connection to client connections hash map
+    /** Log in an anonymous client
+     *
+     * ...
+     *
      * @param c The connection a client is using
      * @param username The username supplied by the client **/
     public Integer loginAnonymousClient(Connection c, String username, String secret) {
@@ -440,10 +441,8 @@ public class SessionManager extends Thread {
         String msg = MessageProcessor.getLockRequestMsg(username, secret);
         serverBroadcast(msg);
 
-        // TODO: Delay sending the login success message?
-        delayThread(1000);
-
-        // TODO: Check if Anonymous clients expect this
+        // Send LOGIN_SUCCESS Message - delay so that we have time to send around the LOCK_REQUEST
+        delayThread(1500);
         msg = MessageProcessor.getLoginSuccessMsg(username);
         c.writeMsg(msg);
         return token;
@@ -452,10 +451,8 @@ public class SessionManager extends Thread {
     /** Checks if the server knows of another server that has at least two less connections than it. If such a server
      * exists, sends a REDIRECT message with that server's hostname and port number.
      * This has been implemented to return the FIRST server that has two or less connections.
-     * @param c The connection to send the message onn**/
-    public boolean checkRedirectClient(Connection c, String username, String secret, boolean anonClient) {
-        Integer logoutToken;
-        String logoutBroadcastMsg;
+     * @param c The connection to send the message on */
+    public boolean checkRedirectClient(Connection c, boolean anonClient) {
         String msg;
         String logoutContext;
 
@@ -660,7 +657,7 @@ public class SessionManager extends Thread {
     //
     // CONNECTION CLOSURE
     //
-    // TODO: Update for Anonymous Users
+    // TODO: Ensure Disconnected Clients that are no longer in the registry don't cause a bug
     public void ensureLogoutDisconnectedClient(Connection c) {
         ConnectedClient client = getConnectedClient(c);
         if (client != null) {

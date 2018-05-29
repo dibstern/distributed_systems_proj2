@@ -55,7 +55,7 @@ public class Responder {
                         secret = Settings.nextSecret();
 
                         // Check if there is another server client should connect to, send getRedirectMsg message if so
-                        boolean redirected = sessionManager.checkRedirectClient(con, username, secret, true);
+                        boolean redirected = sessionManager.checkRedirectClient(con, true);
 
                         // If we didn't redirect, then log this client in!
                         if (!redirected) {
@@ -76,7 +76,7 @@ public class Responder {
                             sessionManager.serverBroadcast(MessageProcessor.getLoginBroadcast(user, secret, token));
                         }
                         // Check if client should be redirected to another server
-                        boolean redirected = sessionManager.checkRedirectClient(con, user, secret, false);
+                        boolean redirected = sessionManager.checkRedirectClient(con, false);
 
                         // If not redirected, send the user all of the messages that are waiting for them
                         if (!redirected) {
@@ -169,7 +169,7 @@ public class Responder {
                     }
 
                     // Send back an ACTIVITY_MESSAGE to the sender, so it can display it on its GUI
-                    con.writeMsg(clientMessage.toString());
+                    con.writeMsg(MessageProcessor.cleanActivityMessage(clientMessage).toString());
                 }
             });
             /* Register message received by server from a client. Client wants to register username and password with
@@ -283,9 +283,6 @@ public class Responder {
                     // Add message to ClientRegistry
                     ClientRegistry clientRegistry = sessionManager.getClientRegistry();
                     String sender = json.get("username").toString();
-
-
-
                     Message received_message = new Message(json);
                     clientRegistry.addMessageToRegistry(received_message, sender);
 

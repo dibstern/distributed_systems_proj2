@@ -485,11 +485,15 @@ public class MessageProcessor {
     }
 
     public static JSONObject processActivityMessage(JSONObject activityMsg, String user, String secret) {
-
         String command = activityMsg.get("command").toString();
         JSONObject activityMessage = (JSONObject) activityMsg.get("activity");
-        activityMessage.put("authenticated_user", user);
 
+        if (isAnonymous(user)) {
+            activityMessage.put("authenticated_user", "anonymous");
+        }
+        else {
+            activityMessage.put("authenticated_user", user);
+        }
         // Create new processed message
         JSONObject processedMsg = new JSONObject();
         processedMsg.put("username", user);
@@ -535,16 +539,21 @@ public class MessageProcessor {
 
     public static JSONObject cleanClientMessage(JSONObject json) {
         JSONObject cleanedMessage = new JSONObject();
-        cleanedMessage.put("activity", json.get("activity"));
         cleanedMessage.put("command", "ACTIVITY_BROADCAST");
+        cleanedMessage.put("activity", json.get("activity"));
         return cleanedMessage;
     }
 
+    public static JSONObject cleanActivityMessage(JSONObject json) {
+        JSONObject cleanedActMsg = new JSONObject();
+        cleanedActMsg.put("command", "ACTIVITY_MESSAGE");
+        cleanedActMsg.put("activity", json.get("activity"));
+        return cleanedActMsg;
+    }
+
     public static boolean isAnonymous(String username) {
-        if (username.length() >= 9) {
-            return (username.substring(0, 9).equals("anonymous"));
-        }
-        return false;
+        return (username.length() >= 9 && username.substring(0, 9).equals("anonymous"));
+
     }
 
 }
