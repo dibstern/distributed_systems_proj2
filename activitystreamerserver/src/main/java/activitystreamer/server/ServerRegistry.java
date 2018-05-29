@@ -15,16 +15,15 @@ public class ServerRegistry {
     private ConnectedServer siblingRoot;
 
 
-    public ServerRegistry(ConnectedServer grandparent, ConnectedServer parent, ConnectedServer sibling)
-    {
+    public ServerRegistry(ConnectedServer grandparent, ConnectedServer parent, ConnectedServer sibling) {
         this.childServers = new ArrayList<ConnectedServer>();
         this.grandparent = grandparent;
         this.parent = parent;
         this.siblingRoot = sibling;
     }
 
-    private ConnectedServer createNewRecord(JSONObject record)
-    {
+    private ConnectedServer createNewRecord(JSONObject record) {
+        String id = record.get("id").toString();
         String hostname = record.get("hostname").toString();
         int port = (int) record.get("port");
         return new ConnectedServer(hostname, port);
@@ -41,7 +40,10 @@ public class ServerRegistry {
 
     // Set the first child server in the ArrayList as the designated child root
     public ConnectedServer designateChildAsRoot() {
-        return childServers.get(0);
+        if (!childServers.isEmpty()) {
+            return childServers.get(0);
+        }
+        return null;
     }
 
     // GETTERS AND SETTERS

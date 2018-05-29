@@ -48,7 +48,7 @@ public class MessageProcessor {
         if (json.containsKey("registry")) {
             Object registryObj = json.get("registry");
 
-            if (registryObj instanceof JSONArray) { // TODO: This
+            if (registryObj instanceof JSONArray) {
                 isValidServerAuthMsg = true;
             }
         }
@@ -58,14 +58,24 @@ public class MessageProcessor {
         String missingFieldMsg = "the received " + command + " was missing fields";
 
         switch (command) {
-
             // TODO: Check that this is correct
-            case "AUTHENTICATION_SUCCESS":
+            case "ANON_CONFIRM":
+            case "ANON_CHECK":
+                return (json.containsKey("anon_record") ? null : missingFieldMsg);
+            case "MSG_ACKS":
+                return (json.containsKey("sender") && json.containsKey("messages") ? null : missingFieldMsg);
+
             case "GRANDPARENT_UPDATE":
+                return (json.containsKey("new_grandparent") ? null : missingFieldMsg);
             case "SIBLING_UPDATE":
-                return (isValidServerAuthMsg ? null : missingFieldMsg);
+                return (json.containsKey("new_sibling") ? null : missingFieldMsg);
+            case "AUTHENTICATION_SUCCESS":
+                return (isValidServerAuthMsg && json.containsKey("") ? null : missingFieldMsg);
             case "AUTHENTICATE":
                 return (containsSecret && isValidServerAuthMsg ? null : missingFieldMsg);
+            case "SERVER_ANNOUNCE":
+                return ((json.containsKey("id") && json.containsKey("load") && json.containsKey("hostname") &&
+                        json.containsKey("port") && isValidServerAuthMsg) ? null : missingFieldMsg);
             case "LOGIN":
             case "REGISTER":
             case "LOCK_REQUEST":
@@ -79,16 +89,11 @@ public class MessageProcessor {
                 return (containsLoginInfo && containsActivity ? null : missingFieldMsg);
             case "ACTIVITY_BROADCAST":
                 return (containsActivity && containsLoginInfo && containsAMBroadcastInfo? null : missingFieldMsg);
-            case "SERVER_ANNOUNCE":
-                return ((json.containsKey("id") && json.containsKey("load") && json.containsKey("hostname") &&
-                        json.containsKey("port") && json.containsKey("registry")) ? null : missingFieldMsg);
             case "AUTHENTICATION_FAIL":
             case "INVALID_MESSAGE":
                 return (json.containsKey("info") ? null : missingFieldMsg);
             case "LOGOUT":
                 return null;
-            case "MSG_ACKS":
-                return (json.containsKey("sender") && json.containsKey("messages") ? null : missingFieldMsg);
             // Unrecognised command -> Return false, triggering an INVALID_MESSAGE
             default:
                 return "the received message contained an unrecognised command: " + command;
@@ -209,15 +214,17 @@ public class MessageProcessor {
                 return null;
 
             // Server messages whereby sending server must be authenticated
+            case "GRANDPARENT_UPDATE":
+            case "SIBLING_UPDATE":
+            case "ANON_CONFIRM":
+            case "ANON_CHECK":
+            case "MSG_ACKS":
             case "AUTHENTICATION_SUCCESS":
             case "SERVER_ANNOUNCE":
             case "ACTIVITY_BROADCAST":
             case "LOCK_REQUEST":
             case "LOCK_DENIED":
             case "LOCK_ALLOWED":
-            case "MSG_ACKS":
-            case "GRANDPARENT_UPDATE":
-            case "SIBLING_UPDATE":
             case "LOGIN_BROADCAST":
             case "LOGOUT_BROADCAST":
                 if (!serverAuthenticated) {

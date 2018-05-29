@@ -4,7 +4,7 @@ package activitystreamer.server;
 import java.util.Objects;
 
 /** Represents a server that a given server knows about, but may not have a direct connection to */
-public class ConnectedServer {
+public class ConnectedServer implements Comparable<ConnectedServer> {
 
     // Fields we want to store about a given server
     private String id;
@@ -43,20 +43,40 @@ public class ConnectedServer {
         return this.port;
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null) {
-            return false;
-        }
-        if (getClass() != o.getClass()) {
-            return false;
-        }
-        ConnectedServer server = (ConnectedServer) o;
 
-        // Check their ids are the same - if so, they're the same!
-        return Objects.equals(this.getId(), server.getId());
+
+
+
+    // ----------------------------------- COMPARING ConnectedServers -----------------------------------
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (!ConnectedServer.class.isAssignableFrom(obj.getClass())) {
+            return false;
+        }
+        final ConnectedServer other = (ConnectedServer) obj;
+        if ((this.id == null) ? (other.getId() != null) : !this.id.equals(other.getId())) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 3;
+        hash = 53 * hash + (this.id != null ? this.id.hashCode() : 0);
+        return hash;
+    }
+
+    public int compareTo(ConnectedServer anotherMessage) {
+        return anotherMessage.getId().compareTo(this.id);
+    }
+
+
+    @Override
+    public String toString() {
+        return id + hostname + Integer.toString(port);
     }
 }

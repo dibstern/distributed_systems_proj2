@@ -181,8 +181,8 @@ public class SessionManager extends Thread {
     public void run() {
         log.info("using activity interval of " + Settings.getActivityInterval() + " milliseconds");
         while (!term) {
-            // do something with 5 second intervals in between
             try {
+                // Deliver queued messages every second
                 Thread.sleep(Settings.getActivityInterval() / 5);
                 makeDeliveries();
                 Thread.sleep(Settings.getActivityInterval() / 5);
@@ -198,7 +198,7 @@ public class SessionManager extends Thread {
                 log.info("received an interrupt, system is shutting down");
                 break;
             }
-            // System.out.println("    Server " + Settings.getLocalPort() + " has load: " + clientConnections.size());
+            // Make a serverAnnounce every 5 seconds
             serverAnnounce();
         }
         log.info("closing " + connections.size() + " connections");
