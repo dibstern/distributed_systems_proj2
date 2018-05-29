@@ -25,10 +25,9 @@ public class ServerRegistry {
 
     private ConnectedServer createNewRecord(JSONObject record)
     {
-        String id = record.get("id").toString();
         String hostname = record.get("hostname").toString();
         int port = (int) record.get("port");
-        return new ConnectedServer(id, hostname, port);
+        return new ConnectedServer(hostname, port);
     }
 
     // A child server has crashed -- remove from ArrayList
@@ -46,24 +45,28 @@ public class ServerRegistry {
     }
 
     // GETTERS AND SETTERS
-    public ConnectedServer getGrandparent() {
-        return this.grandparent;
+    public JSONObject getGrandparent() {
+        String jsonGrandparent = MessageProcessor.getGson().toJson(this.grandparent);
+        return MessageProcessor.toJson(jsonGrandparent, false, "grandparent");
     }
 
-    public ConnectedServer getParent() {
-        return this.parent;
+    public JSONObject getParent() {
+
+        String jsonParent = MessageProcessor.getGson().toJson(this.parent);
+        return MessageProcessor.toJson(jsonParent, false, "parent");
     }
 
-    public ConnectedServer getSiblingRoot() {
-        return this.siblingRoot;
+    public JSONObject getSiblingRoot() {
+        String jsonSibling = MessageProcessor.getGson().toJson(this.siblingRoot);
+        return MessageProcessor.toJson(jsonSibling, false, "sibling");
     }
 
     public void setGrandparent(JSONObject newGrandparent) {
         this.grandparent = createNewRecord(newGrandparent);
     }
 
-    public void setParent(JSONObject newParent) {
-        this.parent = createNewRecord(newParent);
+    public void setParent(String hostname, int port) {
+        this.parent = new ConnectedServer(hostname, port);
     }
 
     public void setSiblingRoot(JSONObject newSiblingRoot ) {

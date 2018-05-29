@@ -353,7 +353,11 @@ public class SessionManager extends Thread {
     }
 
     public void serverAuthenticateSuccess(Connection con) {
-        String msg = MessageProcessor.getAuthenticationSuccessMsg(clientRegistry.getRecordsJson());
+        String msg = MessageProcessor.getAuthenticationSuccessMsg(clientRegistry.getRecordsJson(),
+                                                                  serverRegistry.getParent(),
+                                                                  serverRegistry.getSiblingRoot(),
+                                                                  Settings.getLocalHostname(),
+                                                                  Settings.getLocalPort());
         con.writeMsg(msg);
     }
 

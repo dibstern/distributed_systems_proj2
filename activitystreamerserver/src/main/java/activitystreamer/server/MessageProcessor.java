@@ -414,9 +414,14 @@ public class MessageProcessor {
         return msg.toString();
     }
 
-    public static String getAuthenticationSuccessMsg(JSONObject clientRecordsJson) {
+    public static String getAuthenticationSuccessMsg(JSONObject clientRecordsJson, JSONObject grandparent,
+                                                     JSONObject siblingRoot, String hostname, int port) {
         JSONObject msg = new JSONObject();
         msg.put("command", "AUTHENTICATION_SUCCESS");
+        msg.put("hostname", hostname);
+        msg.put("port", port);
+        msg.put("grandparent", grandparent);
+        msg.put("sibling", siblingRoot);
         // Adds all mappings in clientRecordsJson to msg (only "registry" is mapped to a value)
         msg.putAll(clientRecordsJson);
         return msg.toString();

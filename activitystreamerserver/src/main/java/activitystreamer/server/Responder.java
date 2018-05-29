@@ -222,6 +222,13 @@ public class Responder {
             responses.put("AUTHENTICATION_SUCCESS", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
+                    String parentHost = json.get("hostname").toString();
+                    int port = (int) json.get("port");
+                    SessionManager.getInstance().getServerRegistry().setParent(parentHost, port);
+                    JSONObject grandparent = (JSONObject) json.get("grandparent");
+                    SessionManager.getInstance().getServerRegistry().setSiblingRoot(grandparent);
+                    JSONObject sibling = (JSONObject) json.get("sibling");
+                    SessionManager.getInstance().getServerRegistry().setSiblingRoot(sibling);
                     JSONArray registry = (JSONArray) json.get("registry");
                     SessionManager.getInstance().getClientRegistry().updateRecords(registry);
                 }
