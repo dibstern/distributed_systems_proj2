@@ -465,7 +465,7 @@ public class SessionManager extends Thread {
         boolean logoutFailed = false;
         boolean disconnect = false;
         for (ConnectedServer server : serverInfo.values()) {
-            if (server.getLoad() <= load - 2) {
+            if ((anonClient && server.getLoad() <= load - 1) || !anonClient && server.getLoad() <= load - 2) {
                 redirect = true;
                 msg = MessageProcessor.getRedirectMsg(server.getHostname(), server.getPort());
                 logoutContext = "Context: Redirecting, now in checkRedirect (in SessionManager)";
