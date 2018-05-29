@@ -462,7 +462,7 @@ public class SessionManager extends Thread {
 
         int load = clientConnections.size();
         boolean redirect = false;
-        boolean redirectFailed = true;
+        boolean logoutFailed = false;
         boolean disconnect = false;
         for (ConnectedServer server : serverInfo.values()) {
             if (server.getLoad() <= load - 2) {
@@ -479,7 +479,7 @@ public class SessionManager extends Thread {
                     }
                     else {
                         log.debug("Failed Redirection; logoutClient failed. Trying with next server");
-                        redirectFailed = true;
+                        logoutFailed = true;
                     }
                 }
                 else {
@@ -496,7 +496,7 @@ public class SessionManager extends Thread {
                 }
             }
         }
-        if (redirect && redirectFailed) {
+        if (redirect && logoutFailed) {
             log.debug("Completely Failed Redirection; logoutClient failed.");
         }
         return false;
