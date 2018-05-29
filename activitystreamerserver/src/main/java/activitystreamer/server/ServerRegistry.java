@@ -69,6 +69,18 @@ public class ServerRegistry {
         this.parent = new ConnectedServer(hostname, port);
     }
 
+    public void setNoParent() {
+        this.parent = null;
+    }
+
+    public void setNoGrandparent() {
+        this.grandparent = null;
+    }
+
+    public void setNoSibling() {
+        this.siblingRoot = null;
+    }
+
     public void setSiblingRoot(JSONObject newSiblingRoot ) {
         this.siblingRoot = createNewRecord(newSiblingRoot);
     }
