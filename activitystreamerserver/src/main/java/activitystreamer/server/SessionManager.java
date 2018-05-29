@@ -189,12 +189,21 @@ public class SessionManager extends Thread {
         }
         log.info("closing " + connections.size() + " connections");
         // clean up
-        for (Connection connection : connections) {
-            connection.closeCon();
-        }
+        closeAllConnections();
         listener.setTerm(true);
     }
 
+    public void closeAllConnections() {
+        for (Connection c : connections) {
+            sessionManager.closeConnection(c, "Context: Closing all connections");
+        }
+        serverConnections.forEach((c) -> {
+            sessionManager.closeConnection(c, "Context: Closing all connections");
+        });
+        clientConnections.keySet().forEach((c) -> {
+            sessionManager.closeConnection(c, "Context: Closing all connections");
+        });
+    }
 
     /** Received an invalid message from some connection. Generate an invalid message response
      * and send to the source of the invalid message, then close the connection.
