@@ -50,15 +50,20 @@ public class ClientRegistry {
             // Update existing record
             if (userExists(username)) {
                 ClientRecord oldClientRecord = clientRecords.get(username);
-
-                // Update if the record has the correct secret
-                if (oldClientRecord.sameSecret(clientRecordJson)) {
-                    oldClientRecord.updateRecord(clientRecordJson);
-                }
-                // Conflicting ClientRecord username & secret combination. Conflict created during network partition.
-                // We delete both.
-                else {
+                Integer loginToken = oldClientRecord.getLoggedInToken();
+                if (MessageProcessor.isAnonymous(username) && loginToken >= 3) {
                     clientRecords.remove(username);
+                }
+                else {
+                    // Update if the record has the correct secret
+                    if (oldClientRecord.sameSecret(clientRecordJson)) {
+                        oldClientRecord.updateRecord(clientRecordJson);
+                    }
+                    // Conflicting ClientRecord username & secret combination. Conflict created during network partition.
+                    // We delete both.
+                    else {
+                        clientRecords.remove(username);
+                    }
                 }
             }
             // Or create a new record
