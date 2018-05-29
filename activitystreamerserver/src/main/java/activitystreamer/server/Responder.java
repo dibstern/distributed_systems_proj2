@@ -146,9 +146,9 @@ public class Responder {
                         ConnectedClient conClient = sessionManager.getConnectedClient(con);
                         user = conClient.getUsername();
                     }
-                    
+
                     // `Process` the message
-                    JSONObject clientMessage = MessageProcessor.processActivityMessage(json);
+                    JSONObject clientMessage = MessageProcessor.processActivityMessage(json, user);
 
                     // Retrieve the logged in users (known to the clientRegistry at this time)
                     ArrayList<String> loggedInUsers = clientRegistry.getLoggedInUsers();
@@ -293,6 +293,9 @@ public class Responder {
                     // Add message to ClientRegistry
                     ClientRegistry clientRegistry = sessionManager.getClientRegistry();
                     String sender = json.get("username").toString();
+
+
+
                     Message received_message = new Message(json);
                     clientRegistry.addMessageToRegistry(received_message, sender);
 

@@ -40,7 +40,7 @@ public class MessageProcessor {
         // Get the required information from the JSONObject
         boolean containsSecret = json.containsKey("secret");
         boolean containsLoginInfo = json.containsKey("username") &&
-                (json.get("username").toString().equals("anonymous") || containsSecret);
+                (isAnonymous(json.get("username").toString()) || containsSecret);
         boolean containsActivity = json.containsKey("activity");
         boolean containsAMBroadcastInfo = (json.containsKey("recipients") && json.containsKey("token"));
         boolean isValidServerAuthMsg = false;
@@ -113,7 +113,7 @@ public class MessageProcessor {
                 return "username field is not a String";
             }
             else {
-                if (!(o.toString()).equals("anonymous")) {
+                if (!(isAnonymous(o.toString()))) {
                     if (json.containsKey("secret")) {
                         o = json.get("secret");
                         if (!(o instanceof String)) {
@@ -171,7 +171,7 @@ public class MessageProcessor {
 
         if (json.containsKey("username")) {
             username = json.get("username").toString();
-            if (!username.equals("anonymous") && json.containsKey("secret")) {
+            if (!isAnonymous(username) && json.containsKey("secret")) {
                 secret = json.get("secret").toString();
             }
         }
@@ -186,7 +186,7 @@ public class MessageProcessor {
         // Check client has logged in, and if username is NOT anonymous, username and secret match that stored locally
         boolean validClient = (clientLoggedIn &&
                 ((username != null && secret != null && clientRegistry.secretCorrect(username, secret)) ||
-                        (username != null && username.equals("anonymous"))));
+                        (username != null && isAnonymous(username))));
 
         switch(command) {
 
@@ -484,9 +484,7 @@ public class MessageProcessor {
         return msg.toString();
     }
 
-    public static JSONObject processActivityMessage(JSONObject activityMsg) {
-
-        String user = activityMsg.get("username").toString();
+    public static JSONObject processActivityMessage(JSONObject activityMsg, String user) {
 
         String command = activityMsg.get("command").toString();
         JSONObject activityMessage = (JSONObject) activityMsg.get("activity");
@@ -495,7 +493,7 @@ public class MessageProcessor {
         // Create new processed message
         JSONObject processedMsg = new JSONObject();
         processedMsg.put("username", user);
-        if (!user.equals("anonymous")) {
+        if (!isAnonymous(user)) {
             processedMsg.put("secret", activityMsg.get("secret").toString());
         }
         processedMsg.put("command", command);
