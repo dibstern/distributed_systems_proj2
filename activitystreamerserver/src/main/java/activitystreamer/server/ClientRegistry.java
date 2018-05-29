@@ -1,6 +1,7 @@
 package activitystreamer.server;
 
 import activitystreamer.util.LoginException;
+import activitystreamer.util.RecordAccessException;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import java.util.ArrayList;
@@ -383,13 +384,24 @@ public class ClientRegistry {
     // ------------------------------ GENERAL GETTERS & SETTERS ------------------------------
 
     public ClientRecord getClientRecord(String user) {
-        if (!clientRecords.containsKey(user)) {
-            SessionManager.logDebug("ERROR: - getClientRecord in clientRegistry - user: " + user +
-                    " not in clientRecords" + clientRecords);
+
+        try {
+            ClientRecord record = clientRecords.get(user);
+            if (record == null) {
+                String errorMsg = "ERROR: - getClientRecord in clientRegistry - user: " + user +
+                        " not in clientRecords" + clientRecords;
+                throw new RecordAccessException(errorMsg);
+            }
+            else {
+                return record;
+            }
+        }
+        catch (RecordAccessException e) {
+            e.printStackTrace();
+            SessionManager.logDebug(e.getMessage());
             System.exit(1);
             return null;
         }
-        return clientRecords.get(user);
     }
 
 }
