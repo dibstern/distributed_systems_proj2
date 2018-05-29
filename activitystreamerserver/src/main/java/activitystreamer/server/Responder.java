@@ -60,11 +60,11 @@ public class Responder {
                         // If we didn't redirect, then log this client in!
                         if (!redirected) {
                             // Add connection to clientConnections, create ConnectedClient, Add to ClientRegistry
-                            token = sessionManager.loginAnonymousClient(con, user, secret);
+                            token = sessionManager.loginAnonymousClient(con, username, secret);
 
                             // If login succeeded, broadcast LOGIN_BROADCAST message
                             if (!token.equals(Integer.MIN_VALUE)) {
-                                sessionManager.serverBroadcast(MessageProcessor.getLoginBroadcast(user, secret, token));
+                                sessionManager.serverBroadcast(MessageProcessor.getLoginBroadcast(username, secret, token));
                             }
                         }
                     }
