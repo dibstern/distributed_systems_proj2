@@ -669,12 +669,14 @@ public class SessionManager extends Thread {
     // TODO: Update for Anonymous Users
     public void ensureLogoutDisconnectedClient(Connection c) {
         ConnectedClient client = getConnectedClient(c);
-        String username = client.getUsername();
-        String secret = client.getSecret();
-        ClientRecord record = getClientRegistry().getClientRecord(username);
-        if (record.loggedIn()) {
-            String logoutContext = "Updating Client Registry w/ logout out of disconnected Client";
-            clientRegistry.logoutUser(username, secret, logoutContext, Integer.MIN_VALUE);
+        if (client != null) {
+            String username = client.getUsername();
+            String secret = client.getSecret();
+            ClientRecord record = getClientRegistry().getClientRecord(username);
+            if (record.loggedIn()) {
+                String logoutContext = "Updating Client Registry w/ logout out of disconnected Client";
+                clientRegistry.logoutUser(username, secret, logoutContext, Integer.MIN_VALUE);
+            }
         }
     }
 
