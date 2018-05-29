@@ -74,24 +74,11 @@ public class ClientRegistry {
                 JSONObject recordJson = MessageProcessor.toJson(recordJsonString, false, "");
                 String anonCheckMsg = MessageProcessor.getAnonCheck(recordJson);
 
-                // Broadcast the ANON_CHECK and delete the user from the registry
-                // (we'll add it back if & when we get an ANON_SUCCESS message)
+                // Bcast ANON_CHECK & delete user from the registry (added back if & when we get an ANON_SUCCESS msg)
                 SessionManager.getInstance().serverBroadcast(anonCheckMsg);
                 clientRecords.remove(user);
             }
         });
-
-
-
-
-
-
-
-
-
-
-
-
     }
 
     public void addRecord(String user, ClientRecord clientRecord) {
@@ -210,8 +197,12 @@ public class ClientRegistry {
     }
 
 
-    // TODO: Assign value of this function call when called, make sure we print an error message if it doesn't work
-    // TODO: OR just check w/ userExists(user) before calling removeUser(user).
+    /**
+     * Just ensures that the record assigned to the named user is no longer in our clientRecords. Doesn't matter if the
+     * user isn't in our clientRecords when this is called.
+     * @param username
+     * @return
+     */
     public boolean removeUser(String username) {
         if (clientRecords.containsKey(username)) {
             clientRecords.remove(username);
@@ -308,12 +299,22 @@ public class ClientRegistry {
     }
 
 
-
+    /**
+     *
+     *
+     *
+     * Note: MessageFlush is only called with a 'sender' that is in the registry (its username and secret have been
+     * checked. Thus, we do not need to check if senderRecord is null, we can assume its existence.
+     * @param clientConnections
+     * @param sender
+     * @return
+     */
     public JSONObject messageFlush(HashMap<String, Connection> clientConnections, String sender) {
 
         // To collect tokens and clients who received messages of that token number from the sender
         HashMap<Integer, ArrayList<String>> acks = new HashMap<Integer, ArrayList<String>>();
 
+        // See JavaDoc note as to why we can assume existence.
         ClientRecord senderRecord = getClientRecord(sender);
 
         clientConnections.forEach((user, con) -> {
@@ -358,16 +359,23 @@ public class ClientRegistry {
         return ackMessage;
     }
 
+    /**
+     *
+     *
+     * Called by messageFlush directly above (sender exists), by sendWaitingMessages used by the first messageFlush
+     * (sender exists prior to call), and by Responder's MSG_ACKS, which MAY include a sender that isn't yet in our
+     * registry. In this case we must ignore MSG_ACKS and allow SERVER_ANNOUNCE to update the Message's recipient list.
+     * @param acks
+     * @param sender
+     */
     public void registerAcks(HashMap<Integer, ArrayList<String>> acks, String sender) {
 
-        // TODO: What if we receive a MSG_ACKS for a user we haven't yet registered?
         if (!userExists(sender)) {
             // System.out.print("");
         }
         else {
-            // Report the messages as having been sent
+        // Report the messages as having been sent
             ClientRecord senderRecord = getClientRecord(sender);
-            // TODO -> Build in numAnonReceivers
             acks.forEach((token, recipients) -> senderRecord.receivedMessage(recipients, token));
         }
     }
