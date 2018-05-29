@@ -46,7 +46,6 @@ public class ClientRecord {
         this.undeliverable_messages = MessageProcessor.getGson().fromJson(
                 ((JSONArray) clientRecordJson.get("undeliverable_messages")).toJSONString(),
                 collectionType);
-
     }
 
     /**
@@ -68,7 +67,7 @@ public class ClientRecord {
         ArrayList<Message> receivedUndeliverableMessages = MessageProcessor.getGson().fromJson(
                 ((JSONArray) receivedRecord.get("undeliverable_messages")).toJSONString(),
                 collectionType);
-        if (receivedDeliverableMessages != null) {
+        if (receivedUndeliverableMessages != null) {
             updateMessages(receivedUndeliverableMessages);
         }
     }
