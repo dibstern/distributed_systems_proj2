@@ -25,8 +25,8 @@ public class ServerRegistry {
     private ConnectedServer createNewRecord(JSONObject record) {
         String id = record.get("id").toString();
         String hostname = record.get("hostname").toString();
-        int port = (int) record.get("port");
-        return new ConnectedServer(hostname, port);
+        Integer port = ((Long) record.get("port")).intValue();
+        return new ConnectedServer(id, hostname, port);
     }
 
     // A child server has crashed -- remove from ArrayList
