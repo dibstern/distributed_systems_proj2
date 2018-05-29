@@ -404,4 +404,9 @@ public class ClientRegistry {
         }
     }
 
+    @Override
+    public String toString() {
+        return getRecordsJson().toString();
+    }
+
 }

@@ -161,6 +161,8 @@ public class Responder {
                     // Add message and its expected recipients to ClientRegistry and retrieve the allocated token
                     Integer msgToken = clientRegistry.addMsgToRegistry(user, clientMessage, loggedInUsers);
 
+                    System.out.println("My Registry, as of registering the received message (" + json.toString() + "): " + clientRegistry);
+
                     // Add message token & recipients to ACTIVITY_BROADCAST message
                     String activityBroadcastMsg = MessageProcessor.getActivityBroadcastMsg(clientMessage, loggedInUsers,
                                                                                            msgToken);
