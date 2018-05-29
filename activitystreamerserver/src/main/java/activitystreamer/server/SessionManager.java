@@ -204,9 +204,8 @@ public class SessionManager extends Thread {
         if (clientConnections.containsKey(c)) {
             String loginContext = closeContext + ". Logout Context: Received an invalid message from " +
                     getConnectedClient(c).getUsername() + ".";
-            logoutClient(c, loginContext);
+            logoutClient(c, loginContext, true, true);
         }
-        closeConnection(c, closeContext);
         return true;
     }
 
@@ -471,15 +470,10 @@ public class SessionManager extends Thread {
                 logoutContext = "Context: Redirecting, now in checkRedirect (in SessionManager)";
 
                 if (!anonClient) {
-                    logoutToken = logoutClient(c, logoutContext);
-                    if (!logoutToken.equals(Integer.MIN_VALUE)) {
-                        logoutBroadcastMsg = MessageProcessor.getLogoutBroadcast(username, secret, logoutToken);
-                        sessionManager.serverBroadcast(logoutBroadcastMsg);
+                    boolean doDisconnect = false;
+                    logoutFailed = logoutClient(c, logoutContext, doDisconnect, true);
+                    if (!logoutFailed) {
                         disconnect = true;
-                    }
-                    else {
-                        log.debug("Failed Redirection; logoutClient failed. Trying with next server");
-                        logoutFailed = true;
                     }
                 }
                 else {
@@ -710,15 +704,39 @@ public class SessionManager extends Thread {
         }
     }
 
-    public Integer logoutClient(Connection con, String logoutContext) {
+    public boolean logoutClient(Connection con, String logoutContext, boolean disconnect, boolean bcast) {
         if (conIsClient(con)) {
             ConnectedClient client = getConnectedClient(con);
             String username = client.getUsername();
             String secret = client.getSecret();
-            return clientRegistry.logoutUser(username, secret, logoutContext, Integer.MIN_VALUE);
+            if (MessageProcessor.isAnonymous(username)) {
+                logoutAnonClient(con, logoutContext, username, secret, bcast);
+                return true;
+            }
+            else {
+                Integer logoutToken = clientRegistry.logoutUser(username, secret, logoutContext, Integer.MIN_VALUE);
+                if (!logoutToken.equals(Integer.MIN_VALUE) && bcast) {
+                    String logoutBroadcastMsg = MessageProcessor.getLogoutBroadcast(username, secret, logoutToken);
+                    serverBroadcast(logoutBroadcastMsg);
+                    return true;
+                }
+            }
+            if (disconnect) {
+                closeConnection(con, logoutContext);
+            }
         }
-        return Integer.MIN_VALUE;
+        return false;
     }
+
+    public void logoutAnonClient(Connection con, String logoutContext, String username, String secret, boolean bcast) {
+        clientRegistry.removeUser(username);
+        clientRegistry.clearRecipientFromAllMsgs(username);
+        if (bcast) {
+            String anonLogoutBroadcastMsg = MessageProcessor.getAnonLogoutBroadcast(username, secret);
+            sessionManager.serverBroadcast(anonLogoutBroadcastMsg);
+        }
+    }
+
 
     public boolean conIsClient(Connection con) {
         return clientConnections.containsKey(con);

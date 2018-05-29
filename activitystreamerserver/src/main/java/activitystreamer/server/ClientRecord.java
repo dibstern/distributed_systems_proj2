@@ -255,6 +255,14 @@ public class ClientRecord {
         messages.removeIf(m -> m.getToken().equals(token));
     }
 
+    private void deleteMessages(ArrayList<Integer> tokens) {
+        messages.removeIf(m -> tokens.contains(m.getToken()));
+    }
+
+    private void deleteUndeliverableMessages(ArrayList<Integer> tokens) {
+        undeliverable_messages.removeIf(m -> tokens.contains(m.getToken()));
+    }
+
     /**
      * Used to get the next valid message available for the recipient.
      * @param recipient
@@ -272,6 +280,26 @@ public class ClientRecord {
             }
         }
         return null;
+    }
+
+
+    public void clearRecipientFromAllMsgs(String user) {
+        ArrayList<Integer> messagesToRemove = new ArrayList<Integer>();
+        messages.forEach((m) -> {
+            boolean allDelivered = m.receivedMessage(user);
+            if (allDelivered) {
+                messagesToRemove.add(m.getToken());
+            }
+        });
+        deleteMessages(messagesToRemove);
+        messagesToRemove.clear();
+        undeliverable_messages.forEach((m) -> {
+            boolean allDelivered = m.receivedMessage(user);
+            if (allDelivered) {
+                messagesToRemove.add(m.getToken());
+            }
+        });
+        deleteUndeliverableMessages(messagesToRemove);
     }
 
 

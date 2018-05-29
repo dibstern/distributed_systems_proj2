@@ -388,6 +388,14 @@ public class ClientRegistry {
 
 
 
+    public void clearRecipientFromAllMsgs(String user) {
+        clientRecords.forEach((sender, senderRecord) -> {
+           senderRecord.clearRecipientFromAllMsgs(user);
+        });
+    }
+
+
+
 
     // ------------------------------ GENERAL GETTERS & SETTERS ------------------------------
 
