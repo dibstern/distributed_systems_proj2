@@ -92,6 +92,7 @@ public class MessageProcessor {
             case "AUTHENTICATION_FAIL":
             case "INVALID_MESSAGE":
                 return (json.containsKey("info") ? null : missingFieldMsg);
+            case "SERVER_SHUTDOWN":                                                                                     // TODO: CONFIRM FIELDS OF SERVER_SHUTDOWN
             case "LOGOUT":
                 return null;
             // Unrecognised command -> Return false, triggering an INVALID_MESSAGE
@@ -234,6 +235,10 @@ public class MessageProcessor {
 
             // Is a LOGIN message - not authenticated/logged in yet so okay
             case "LOGIN":
+                return null;
+
+            // Can be sent from an unauthenticated server, or an authenticated server
+            case "SERVER_SHUTDOWN":
                 return null;
 
             // Server messages whereby sending server must be unauthenticated
@@ -579,6 +584,14 @@ public class MessageProcessor {
         cleanedActMsg.put("command", "ACTIVITY_MESSAGE");
         cleanedActMsg.put("activity", json.get("activity"));
         return cleanedActMsg;
+    }
+
+    public static String getShutdownMessage() {
+        JSONObject shutdownMessage = new JSONObject();
+
+        shutdownMessage.put("command", "SERVER_SHUTDOWN");
+
+        return shutdownMessage.toString();
     }
 
     public static boolean isAnonymous(String username) {

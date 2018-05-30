@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.net.SocketException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -89,7 +90,7 @@ public class Connection extends Thread {
             try {
                 try {
                     if (!hasLoggedOut) {
-                        writeMsg(MessageProcessor.getInvalidMessage("Closing Connection"));
+                        writeMsg(MessageProcessor.getShutdownMessage());
                     }
                 }
                 catch (Exception e) {
