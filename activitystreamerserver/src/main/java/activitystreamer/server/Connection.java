@@ -152,4 +152,34 @@ public class Connection extends Thread {
         this.hasLoggedOut = loggedOut;
     }
 
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (!Connection.class.isAssignableFrom(obj.getClass())) {
+            return false;
+        }
+        final Connection other = (Connection) obj;
+        if ((this.socket == null) ? (other.socket != null) : !(Settings.socketAddress(this.socket).equals(Settings.socketAddress(other.socket)))) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 3;
+        hash = 53 * hash + (this.socket != null ? (Settings.socketAddress(this.socket)).hashCode() : 0);
+        return hash;
+    }
+
+    public Integer getPort() {
+        return this.socket.getPort();
+    }
+
+    public String getHostname() {
+        return this.socket.getInetAddress().toString();
+    }
+
 }
