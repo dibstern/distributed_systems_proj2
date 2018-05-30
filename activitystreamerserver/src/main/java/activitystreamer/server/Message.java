@@ -112,7 +112,7 @@ public class Message implements Comparable<Message> {
             return false;
         }
         final Message other = (Message) obj;
-        if ((this.token == null) ? (other.token != null) : !this.clientMessage.equals(other.token)) {
+        if ((this.token == null) ? (other.token != null) : !this.token.equals(other.token)) {
             return false;
         }
         // Used if we implement a sender field
@@ -125,7 +125,7 @@ public class Message implements Comparable<Message> {
     @Override
     public int hashCode() {
         int hash = 3;
-        hash = 53 * hash + (this.clientMessage != null ? this.clientMessage.hashCode() : 0);
+        hash = 53 * hash + (this.token != null ? this.token.hashCode() : 0);
         // Used if we implement a sender field
         // hash = 53 * hash + this.sender;
         return hash;
