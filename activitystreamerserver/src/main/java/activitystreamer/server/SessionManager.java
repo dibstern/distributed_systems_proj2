@@ -21,9 +21,7 @@ import org.json.simple.JSONObject;
 public class SessionManager extends Thread {
     private static final Logger log = LogManager.getLogger();
     private static ArrayList<Connection> connections;
-    private static ArrayList<Connection> serverConnections;
     private static HashMap<Connection, ConnectedClient> clientConnections;
-    private static HashMap<String, ConnectedServer> serverInfo;
     private static ServerRegistry serverRegistry;
     private static boolean term = false;
     private static Listener listener;
@@ -50,22 +48,16 @@ public class SessionManager extends Thread {
         // To store unauthenticated server connections & not yet logged in client connections
         connections = new ArrayList<Connection>();
 
+        // Set server ID by randomly generating a string
+        serverId = Settings.nextSecret();
+
         // To store connected Servers & Clients.
-        serverConnections = new ArrayList<Connection>();
         clientConnections = new HashMap<Connection, ConnectedClient>();
         deliveries = new ConcurrentLinkedQueue<String>();
-
-        // To store information about all know servers in a system
-        serverInfo = new HashMap<String, ConnectedServer>();
+        serverRegistry = new ServerRegistry(serverId, Settings.getLocalPort(), Settings.getLocalHostname());
 
         // Store information about all know clients in a system
         clientRegistry = new ClientRegistry();
-
-        // Store information about servers we have a direct connection to
-        serverRegistry = new ServerRegistry(null, null, null);
-
-        // Set server ID by randomly generating a string
-        serverId = Settings.nextSecret();
 
         responder = new Responder();
 
@@ -94,7 +86,6 @@ public class SessionManager extends Thread {
         if (Settings.getRemoteHostname() != null) {
             try {
                 Connection con = outgoingConnection(new Socket(Settings.getRemoteHostname(), Settings.getRemotePort()));
-                connections.add(con);
                 authenticate(con);
                 log.info("connected to server on port number " + Settings.getRemotePort());
             }
@@ -131,6 +122,9 @@ public class SessionManager extends Thread {
 
         // If the message is an INVALID_MESSAGE or LOGOUT message, close the connection.
         if (command.equals("INVALID_MESSAGE") || command.equals("LOGOUT") || command.equals("AUTHENTICATION_FAIL")) {
+            if (!serverRegistry.isServerCon(con)) {
+                con.setHasLoggedOut(true);
+            }
             con.closeCon();
             return true;        // true because we want terminate = true; makes con delete itself from SessionManager
         }
@@ -154,6 +148,7 @@ public class SessionManager extends Thread {
     public synchronized Connection incomingConnection(Socket s) throws IOException {
         log.debug("incoming connection: " + Settings.socketAddress(s));
         Connection c = new Connection(s);
+
         // Add connection to the "holding" array until it has either logged in or authenticated
         connections.add(c);
         return c;
@@ -168,8 +163,9 @@ public class SessionManager extends Thread {
     public synchronized Connection outgoingConnection(Socket s) throws IOException {
         log.debug("outgoing connection: " + Settings.socketAddress(s));
         Connection c = new Connection(s);
+
         // Add connections straight to server array, as parent server is already authenticated
-        serverConnections.add(c);
+        serverRegistry.addServerCon(c);
         return c;
     }
 
@@ -180,26 +176,30 @@ public class SessionManager extends Thread {
     @Override
     public void run() {
         log.info("using activity interval of " + Settings.getActivityInterval() + " milliseconds");
+        Integer secondsPassed;
+        Integer timeoutInterval;
         while (!term) {
-            try {
-                // Deliver queued messages every second
-                Thread.sleep(Settings.getActivityInterval() / 5);
-                makeDeliveries();
-                Thread.sleep(Settings.getActivityInterval() / 5);
-                makeDeliveries();
-                Thread.sleep(Settings.getActivityInterval() / 5);
-                makeDeliveries();
-                Thread.sleep(Settings.getActivityInterval() / 5);
-                makeDeliveries();
-                Thread.sleep(Settings.getActivityInterval() / 5);
-                makeDeliveries();
+            timeoutInterval = 2;
+            while (timeoutInterval > 0) {
+                try {
+                    secondsPassed = 0;
+                    while (secondsPassed < 5) {
+
+                        // Deliver queued messages every second
+                        Thread.sleep(Settings.getActivityInterval() / 5);
+                        makeDeliveries();
+                        secondsPassed += 1;
+                    }
+                }
+                catch (InterruptedException e) {
+                    log.info("received an interrupt, system is shutting down");
+                    break;
+                }
+                // Make a serverAnnounce every 5 seconds
+                serverAnnounce();
+                reconnectParentIfDisconnected();
+                timeoutInterval -= 1;
             }
-            catch (InterruptedException e) {
-                log.info("received an interrupt, system is shutting down");
-                break;
-            }
-            // Make a serverAnnounce every 5 seconds
-            serverAnnounce();
         }
         log.info("closing " + connections.size() + " connections");
         // clean up
@@ -207,13 +207,32 @@ public class SessionManager extends Thread {
         listener.setTerm(true);
     }
 
+
+    public void reconnectParentIfDisconnected() {
+//        ConnectedServer parentServer = serverRegistry.getParentInfo();
+//        if (parentServer != null) {
+//            if (parentServer.isTimedOut()) {
+//                Connection parentCon = serverRegistry.getParentConnection();
+//                parentCon.closeCon();
+//
+//                // Settings.setRemoteHostname();
+//                // Settings.getRemotePort();
+//                // initiateConnection();
+//
+//                String msg = MessageProcessor.getGrandparentUpdateMsg(serverRegistry.getParentJson());
+//            }
+//        }
+//        else {
+//
+//        }
+    }
+
+
     public void closeAllConnections() {
         for (Connection c : connections) {
             sessionManager.closeConnection(c, "Context: Closing all connections");
         }
-        serverConnections.forEach((c) -> {
-            sessionManager.closeConnection(c, "Context: Closing all connections");
-        });
+        serverRegistry.closeServerCons();
         clientConnections.keySet().forEach((c) -> {
             sessionManager.closeConnection(c, "Context: Closing all connections");
         });
@@ -276,26 +295,6 @@ public class SessionManager extends Thread {
         serverBroadcast(msg);
     }
 
-    /** SERVER_ANNOUNCE message received. Update information about that server, then forward to all other servers
-     * given server is directly connected to.
-     * @param id The sending server's ID
-     * @param load The number of client connections the server has
-     * @param hostname The host name of the server
-     * @param port The port number of the server
-     * */
-    public void updateServerInfo(String id, int load, String hostname, int port) {
-
-        // This is the first server broadcast we have received from this given server - initialise all fields and
-        // set the load of the server
-        if (!serverInfo.containsKey(id + hostname + Integer.toString(port))) {
-            serverInfo.put(id + hostname + Integer.toString(port), new ConnectedServer(id, hostname, port));
-        }
-        // Skips to here if already have basic info stored about the server (have received activity message from them
-        // previously. Update the load of that server.
-        serverInfo.get(id + hostname + Integer.toString(port)).setLoad(load);
-    }
-
-
 
 
 
@@ -325,9 +324,15 @@ public class SessionManager extends Thread {
             // Server supplied correct secret, remove from generic "holding" connections array and add to server
             // connections array
             // Also add this server to our list of child servers
+            ConnectedServer newChild;
             connections.remove(c);
-            serverConnections.add(c);
-            serverAuthenticateSuccess(c);
+            if (serverRegistry.hasRootChild()) {
+                newChild = serverRegistry.addConnectedChild(c);
+            }
+            else {
+                newChild = serverRegistry.addRootChild(c);
+            }
+            serverAuthenticateSuccess(c, newChild);
             return true;
         }
     }
@@ -337,7 +342,7 @@ public class SessionManager extends Thread {
      * returns true, otherwise not authenticated and returns falls.
      * @param c The connection we are checking for authentication**/
     public boolean checkServerAuthenticated(Connection c) {
-        return serverConnections.contains(c);
+        return serverRegistry.isServerCon(c);
     }
 
     /**
@@ -352,13 +357,16 @@ public class SessionManager extends Thread {
         closeConnection(con, closeContext);
     }
 
-    public void serverAuthenticateSuccess(Connection con) {
+    public void serverAuthenticateSuccess(Connection con, ConnectedServer newChild) {
         String msg = MessageProcessor.getAuthenticationSuccessMsg(clientRegistry.getRecordsJson(),
-                                                                  serverRegistry.getParent(),
-                                                                  serverRegistry.getSiblingRoot(),
+                                                                  serverRegistry.toJson(),
                                                                   Settings.getLocalHostname(),
-                                                                  Settings.getLocalPort());
+                                                                  Settings.getLocalPort(), serverId);
         con.writeMsg(msg);
+
+        // Update other child servers with their new sibling!
+        msg = MessageProcessor.getSiblingUpdateMsg(newChild.toJson());
+        forwardServerMsg(con, msg);
     }
 
 
@@ -492,8 +500,9 @@ public class SessionManager extends Thread {
         boolean redirect = false;
         boolean logoutSuccess = false;
         boolean disconnect = false;
-        for (ConnectedServer server : serverInfo.values()) {
-            if (server.getLoad() <= load - 2) {
+        for (ConnectedServer server : serverRegistry.getAllServers()) {
+            Integer serverLoad = server.getLoad();
+            if (server.isConnected() && serverLoad != null && serverLoad <= load - 2) {
                 redirect = true;
                 msg = MessageProcessor.getRedirectMsg(server.getHostname(), server.getPort());
                 logoutContext = "Context: Redirecting, now in checkRedirect (in SessionManager)";
@@ -560,7 +569,7 @@ public class SessionManager extends Thread {
      * @return An integer representing the number of known servers in the network.
      */
     private int numKnownServersInNetwork() {
-        return serverInfo.size();
+        return serverRegistry.numServersInNetwork();
     }
 
     /** Stores the client connection for later reference. Sends a LOCK_REQUEST message and forwards this to all other
@@ -651,7 +660,7 @@ public class SessionManager extends Thread {
      * @param msg The message to be sent across the network **/
     public void broadcastMessage(Connection c, String msg) {
         // Broadcast the message to all servers
-        for (Connection curr: serverConnections) {
+        for (Connection curr: serverRegistry.getServerConnections()) {
             if (curr != c) {
                 curr.writeMsg(msg);
             }
@@ -667,7 +676,7 @@ public class SessionManager extends Thread {
     /** Sends a message to all of the servers a given server has a direct connection to.
      * @param msg The message to be sent **/
     public void serverBroadcast(String msg) {
-        for (Connection c: serverConnections) {
+        for (Connection c: serverRegistry.getServerConnections()) {
             c.writeMsg(msg);
         }
     }
@@ -677,7 +686,7 @@ public class SessionManager extends Thread {
      * @param c The connection that should NOT have the message sent to
      * @param msg The message to be sent **/
     public void forwardServerMsg(Connection c, String msg) {
-        for (Connection con: serverConnections) {
+        for (Connection con: serverRegistry.getServerConnections()) {
             if (con != c) {
                 con.writeMsg(msg);
             }
@@ -719,9 +728,8 @@ public class SessionManager extends Thread {
      */
     public synchronized void deleteClosedConnection(Connection con, String closeConnectionContext) {
 
-        if (serverConnections.contains(con)) {
-            // Close connection to another server
-            serverConnections.remove(con);
+        if (serverRegistry.isServerCon(con)) {
+            serverRegistry.removeCon(con);
         }
         else if (clientConnections.containsKey(con)) {
             // Close connection to another client
@@ -795,7 +803,7 @@ public class SessionManager extends Thread {
      * @param optionalToken
      */
     public void logoutRegisteredClient(String user, String secret, String logoutContext, Integer optionalToken) {
-        Integer logoutToken = clientRegistry.logUser(false, user, secret, logoutContext, optionalToken);
+        clientRegistry.logUser(false, user, secret, logoutContext, optionalToken);
     }
 
 

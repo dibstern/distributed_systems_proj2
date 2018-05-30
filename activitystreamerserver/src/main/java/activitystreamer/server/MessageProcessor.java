@@ -70,7 +70,7 @@ public class MessageProcessor {
             case "SIBLING_UPDATE":
                 return (json.containsKey("new_sibling") ? null : missingFieldMsg);
             case "AUTHENTICATION_SUCCESS":
-                return (isValidServerAuthMsg && json.containsKey("") ? null : missingFieldMsg);
+                return (isValidServerAuthMsg && json.containsKey("") ? null : missingFieldMsg);           // TODO: CONFIRM FIELDS OF AUTHENTICATION_SUCCESS
             case "AUTHENTICATE":
                 return (containsSecret && isValidServerAuthMsg ? null : missingFieldMsg);
             case "SERVER_ANNOUNCE":
@@ -295,6 +295,9 @@ public class MessageProcessor {
         }
     }
 
+
+
+
     /** Creates a LOGIN_SUCCESS message to be sent back to a client.
      * @param username The username a client logged in with
      * @return Msg the message to be sent back to the client */
@@ -426,14 +429,15 @@ public class MessageProcessor {
         return msg.toString();
     }
 
-    public static String getAuthenticationSuccessMsg(JSONObject clientRecordsJson, JSONObject grandparent,
-                                                     JSONObject siblingRoot, String hostname, int port) {
+    public static String getAuthenticationSuccessMsg(JSONObject clientRecordsJson, JSONObject serverRegistryJson,
+                                                     String hostname, int port, String id) {
         JSONObject msg = new JSONObject();
         msg.put("command", "AUTHENTICATION_SUCCESS");
         msg.put("hostname", hostname);
         msg.put("port", port);
-        msg.put("grandparent", grandparent);
-        msg.put("sibling", siblingRoot);
+        msg.put("id", id);
+        msg.putAll(serverRegistryJson);
+
         // Adds all mappings in clientRecordsJson to msg (only "registry" is mapped to a value)
         msg.putAll(clientRecordsJson);
         return msg.toString();

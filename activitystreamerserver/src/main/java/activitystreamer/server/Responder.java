@@ -207,14 +207,28 @@ public class Responder {
                 }
             });
 
+            responses.put("SERVER_SHUTDOWN", new ServerCommand() {
+                @Override
+                public void execute(JSONObject json, Connection con) {
+                    SessionManager sessionManager = SessionManager.getInstance();
+                    String closeConnectionContext = "Close Connection Context: Received SERVER_SHUTDOWN (in Responder)";
+                    con.setHasLoggedOut(true);
+                    sessionManager.closeConnection(con, closeConnectionContext);
+                    sessionManager.reconnectParentIfDisconnected();
+                }
+            });
+
             // ------------------------- FROM SERVER -------------------------
             /* Server has received an authenticate message from another server. Authenticate the server.
              * This is the one server message we do not check that sending server is authenticated first. **/
             responses.put("AUTHENTICATE", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
-                    // Authenticate the server
+
+                    // Authenticate the server and set child (root or otherwise)
                     SessionManager.getInstance().authenticateIncomingSever((String) json.get("secret"), con);
+
+                    // Accept the registry and use it to update ours (as part of the handshake)
                     JSONArray registry = (JSONArray) json.get("registry");
                     SessionManager.getInstance().getClientRegistry().updateRecords(registry);
                 }
@@ -222,16 +236,34 @@ public class Responder {
             responses.put("AUTHENTICATION_SUCCESS", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
+                    SessionManager sessionManager = SessionManager.getInstance();
+                    ServerRegistry serverRegistry = sessionManager.getServerRegistry();
+
+                    // Retrieve info from the message
                     String parentHost = json.get("hostname").toString();
                     int port = ((Long) json.get("port")).intValue();
                     String id = json.get("id").toString();
-                    SessionManager.getInstance().getServerRegistry().setParent(id, parentHost, port);
+
+                    // Update client Registry
+                    sessionManager.getClientRegistry().updateRecords((JSONArray) json.get("registry"));
+
+                    // Set the connected Parent
+                    serverRegistry.setConnectedParent(id, parentHost, port, con);
+
+                    // Set the grandparent, if any
                     JSONObject grandparent = (JSONObject) json.get("grandparent");
-                    SessionManager.getInstance().getServerRegistry().setSiblingRoot(grandparent);
-                    JSONObject sibling = (JSONObject) json.get("sibling");
-                    SessionManager.getInstance().getServerRegistry().setSiblingRoot(sibling);
-                    JSONArray registry = (JSONArray) json.get("registry");
-                    SessionManager.getInstance().getClientRegistry().updateRecords(registry);
+                    if (grandparent != null) {
+                        serverRegistry.setGrandparent(grandparent);
+                    }
+                    else {
+                        serverRegistry.setNoGrandparent();
+                    }
+
+                    // Set the sibling servers, if any
+                    JSONArray sibling_servers = (JSONArray) json.get("sibling_servers");
+                    if (sibling_servers != null) {
+                        serverRegistry.addSiblingsList(sibling_servers);
+                    }
                 }
             });
             /* ... */
@@ -240,7 +272,12 @@ public class Responder {
                 public void execute(JSONObject json, Connection con) {
                     ServerRegistry serverRegistry = SessionManager.getInstance().getServerRegistry();
                     JSONObject grandparentRecord = (JSONObject) json.get("new_grandparent");
-                    serverRegistry.setGrandparent(grandparentRecord);
+                    if (grandparentRecord != null) {
+                        serverRegistry.setGrandparent(grandparentRecord);
+                    }
+                    else {
+                        serverRegistry.setNoGrandparent();
+                    }
                 }
             });
             /* ... */
@@ -249,7 +286,7 @@ public class Responder {
                 public void execute(JSONObject json, Connection con) {
                     ServerRegistry serverRegistry = SessionManager.getInstance().getServerRegistry();
                     JSONObject siblingRecord = (JSONObject) json.get("new_sibling");
-                    serverRegistry.setSiblingRoot(siblingRecord);
+                    serverRegistry.addSibling(siblingRecord);
                 }
             });
             responses.put("ANON_CONFIRM", new ServerCommand() {
@@ -375,13 +412,24 @@ public class Responder {
                     int port = ((Long) json.get("port")).intValue();
                     JSONArray newClientRegistry = (JSONArray) json.get("registry");
 
-                    // Update this server's information about the given server
+                    // Update our client registry
                     SessionManager sessionManager = SessionManager.getInstance();
-                    sessionManager.updateServerInfo(id, load, hostname, port);
                     sessionManager.getClientRegistry().updateRecords(newClientRegistry);
+
+                    // Update this server's information about the given server
+                    // TODO: If the connection is our parent, then the SERVER_ANNOUNCE is not from a child
+                    ServerRegistry serverRegistry = sessionManager.getServerRegistry();
+                    if (serverRegistry.isParentConnection(con)) {
+                        serverRegistry.updateRegistry(id, load, hostname, port, false);
+                    }
+                    else {
+                        serverRegistry.updateRegistry(id, load, hostname, port, true);
+                    }
+
 
                     // Forward to all other servers that this server is connected to
                     sessionManager.forwardServerMsg(con, json.toString());
+
                 }
             });
             /* A server on the network is trying to register a new user. Check if username exists on this server, and
