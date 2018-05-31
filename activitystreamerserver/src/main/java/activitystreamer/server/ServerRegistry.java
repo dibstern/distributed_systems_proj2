@@ -163,7 +163,7 @@ public class ServerRegistry {
             sibling.setIsSibling(true);
 
             if (!all_servers.containsKey(sibling.getId())) {
-                System.out.println("Adding Siblings List -> Adding connection to server_connections: " + sibling.getPort());
+                System.out.println("Adding Siblings List -> Adding connection to all_servers: " + sibling.getPort());
                 all_servers.put(sibling.getId(), sibling);
             }
         });
@@ -201,7 +201,7 @@ public class ServerRegistry {
     }
 
     public boolean isServerCon(Connection con) {
-        return server_connections.containsKey(con);
+        return server_connections.containsKey(con) || unauthorised_connections.contains(con);
     }
 
     // ------------------------------ CONNECTION CLOSING ------------------------------
@@ -276,6 +276,8 @@ public class ServerRegistry {
     public ConcurrentLinkedQueue<ConnectedServer> getConsToTry() {
         ConcurrentLinkedQueue<ConnectedServer> consToTry = new ConcurrentLinkedQueue<ConnectedServer>();
 
+
+
         // Add all other siblings, if we are not the root sibling
         if (!amRootSibling()) {
             siblings_list.forEach((sibling) -> {
@@ -288,6 +290,7 @@ public class ServerRegistry {
         // Add all remaining servers that aren't already included and that aren't children
         all_servers.forEach((id, server) -> {
             if (!consToTry.contains(server) && !server.isChild()) {
+                System.out.println("Adding " + server + " to connections to try");
                 tryToAdd(consToTry, server);
             }
         });
