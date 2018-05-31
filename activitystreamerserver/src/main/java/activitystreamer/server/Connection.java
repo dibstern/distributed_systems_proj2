@@ -128,7 +128,7 @@ public class Connection extends Thread {
                 // System.out.println("Processing: " + data);
                 printDebugMessages(data, false);
             }
-            log.debug("connection closed to " + Settings.socketAddress(socket));
+            log.debug("connection closed to " + Settings.socketAddress(socket) + " after reading null data");
 
             // Ensure the user is recorded as being logged out in the ClientRegistry
             SessionManager.getInstance().ensureLogoutDisconnectedClient(this);
@@ -199,6 +199,12 @@ public class Connection extends Thread {
         String localAddress = this.socket.getLocalAddress().toString();
         return localAddress.replaceAll("[\\,/]", "");
         // return this.socket.getInetAddress().toString();
+    }
+
+    @Override
+    public String toString() {
+        return "Local Hostname & Port: " + getHostname() + ":" + getPort() + "; SocketAddress: " +
+                Settings.socketAddress(this.socket) + "; RemoteSocketAddress: " + this.socket.getRemoteSocketAddress();
     }
 
 }

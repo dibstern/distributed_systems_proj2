@@ -142,6 +142,12 @@ public class ConnectedServer implements Comparable<ConnectedServer> {
 
     @Override
     public String toString() {
-        return id + hostname + Integer.toString(port);
+        String child_status = (this.is_child ? "is child, " : "not child, ");
+        String parent_status = (this.is_parent ? "is parent, " : "not parent, ");
+        String sibling_status = (this.is_sibling ? "is sibling, " : "not sibling, ");
+        String connected_status = (this.is_connected ? "is connected, " : "not connected, ");
+        return "{" + hostname + ":" + Integer.toString(port) + " (id=" + id + "), load: " + load + ", last_announce: " +
+                last_announce.toLocalTime() + ", " + child_status + parent_status + sibling_status + connected_status +
+                "}";
     }
 }

@@ -1,5 +1,6 @@
 package activitystreamer.server;
 
+import activitystreamer.util.Settings;
 import com.google.gson.reflect.TypeToken;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -19,10 +20,10 @@ public class ServerRegistry {
     private ArrayList<Connection> unauthorised_connections;
     private ConnectedServer grandparent;
     private ConnectedServer parent;
+    private Connection parentConnection;
     private ConnectedServer child_root;
     private ConnectedServer this_server;
     private ArrayList<ConnectedServer> siblings_list;
-    private Connection parentConnection;
     private ConcurrentHashMap<ConnectedServer, Connection> connectedChildServers;
     private ConcurrentHashMap<String, ConnectedServer> all_servers;
 
@@ -290,7 +291,6 @@ public class ServerRegistry {
         // Add all remaining servers that aren't already included and that aren't children
         all_servers.forEach((id, server) -> {
             if (!consToTry.contains(server) && !server.isChild()) {
-                System.out.println("Adding " + server + " to connections to try");
                 tryToAdd(consToTry, server);
             }
         });
@@ -302,7 +302,8 @@ public class ServerRegistry {
     }
 
     public ConcurrentLinkedQueue<ConnectedServer> tryToAdd(ConcurrentLinkedQueue<ConnectedServer> servers, ConnectedServer server) {
-        if (server != null) {
+        if (server != null && (server.getPort() != Settings.getLocalPort()) ) {
+            System.out.println("Adding " + server + " to connections to try");
             servers.add(server);
         }
         return servers;
@@ -378,5 +379,60 @@ public class ServerRegistry {
         // all_servers.remove(c.getId());
     }
 
+
+    @Override
+    public String toString() {
+        return "{\nserver_connections: " + serverConnectionsString() + "unauthorised_connections: " + unAuthConStr() +
+            "grandparent: " + grandparent.toString() +
+                ", parent: " + parent.toString() + ", parentConnection: " + parentConnection.toString() +
+                ", child_root: " + child_root.toString() + ", this_server: " + this_server + ", " +
+                ", sibling_list: " + siblingListStr() + ", connectedChildServers: " + connectedChildServStr() +
+                ", all_servers: " + allServersStr() + "}";
+    }
+
+    public String serverConnectionsString() {
+        String str = "{";
+        server_connections.forEach((con, server) -> {
+            str.concat("\n" + con.toString() + " : " + server.toString() + ",\n");
+        });
+        str.concat("}\n");
+        return str;
+    }
+
+    public String unAuthConStr() {
+        String str = "{";
+        unauthorised_connections.forEach((con) -> {
+            str.concat("\n" + con.toString() + ",\n");
+        });
+        str.concat("}\n");
+        return str;
+    }
+
+    public String siblingListStr() {
+        String str = "{";
+        siblings_list.forEach((sibling) -> {
+            str.concat("\n" + sibling.toString() + ",\n");
+        });
+        str.concat("}\n");
+        return str;
+    }
+
+    public String connectedChildServStr() {
+        String str = "{";
+        connectedChildServers.forEach((child, con) -> {
+            str.concat("\n" + child.toString() + " : " + con.toString() + ",\n");
+        });
+        str.concat("}\n");
+        return str;
+    }
+
+    public String allServersStr() {
+        String str = "{";
+        all_servers.forEach((id, server) -> {
+            str.concat("\n" + id + " : " + server.toString() + ",\n");
+        });
+        str.concat("}\n");
+        return str;
+    }
 
 }

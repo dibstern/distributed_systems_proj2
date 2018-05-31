@@ -115,13 +115,12 @@ public class SessionManager extends Thread {
             System.out.println("Trying to connect to: " + hostname + ":" + port);
             Connection con = outgoingConnection(new Socket(hostname, port));
             authenticate(con);
-            log.info("connected to server on port number " + Settings.getRemotePort());
+            log.info("connected to server on port number " + port);
             serverRegistry.setConnectedParent(conToTry.getId(), hostname, port, con);
             return true;
         }
         catch (IOException e) {
-            log.error("failed to make connection to " + Settings.getRemoteHostname() + ":" +
-                    Settings.getRemotePort() + " :" + e);
+            log.error("failed to make connection to " + hostname + ":" + port + " :" + e);
             return false;
         }
     }
