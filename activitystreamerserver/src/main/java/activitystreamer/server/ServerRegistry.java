@@ -399,48 +399,53 @@ public class ServerRegistry {
     }
 
     public String serverConnectionsString() {
-        String str = "{";
+        StringBuilder str = new StringBuilder();
+        str.append("{");
         server_connections.forEach((con, server) -> {
-            str.concat("\n" + con.toString() + " : " + server.toString() + ",\n");
+            str.append("\n" + con.toString() + " : " + server.toString() + ",\n");
         });
-        str.concat("}\n");
-        return str;
+        str.append("}\n");
+        return str.toString();
     }
 
     public String unAuthConStr() {
-        String str = "{";
+        StringBuilder str = new StringBuilder();
+        str.append("{");
         unauthorised_connections.forEach((con) -> {
-            str.concat("\n" + con.toString() + ",\n");
+            str.append("\n" + con.toString() + ",\n");
         });
-        str.concat("}\n");
-        return str;
+        str.append("}\n");
+        return str.toString();
     }
 
     public String siblingListStr() {
-        String str = "{";
+        StringBuilder str = new StringBuilder();
+        str.append("{");
         siblings_list.forEach((sibling) -> {
-            str.concat("\n" + sibling.toString() + ",\n");
+            str.append("\n" + sibling.toString() + ",\n");
         });
-        str.concat("}\n");
-        return str;
+        str.append("}\n");
+        return str.toString();
     }
 
     public String connectedChildServStr() {
-        String str = "{";
+        StringBuilder str = new StringBuilder();
+        str.append("{");
         connectedChildServers.forEach((child, con) -> {
-            str.concat("\n" + child.toString() + " : " + con.toString() + ",\n");
+            str.append("\n" + child.toString() + " : " + con.toString() + ",\n");
         });
-        str.concat("}\n");
-        return str;
+        str.append("}\n");
+        return str.toString();
     }
 
     public String allServersStr() {
-        String str = "{";
+        StringBuilder str = new StringBuilder();
+        str.append("{");
         all_servers.forEach((id, server) -> {
-            str.concat("\n" + id + " : " + server.toString() + ",\n");
+            str.append("\n" + id + " : " + server.toString() + ",\n");
         });
-        str.concat("}\n");
-        return str;
+        str.append("}\n");
+        return str.toString();
     }
 
 }

@@ -203,8 +203,8 @@ public class Connection extends Thread {
 
     @Override
     public String toString() {
-        return "Local Hostname & Port: " + getHostname() + ":" + getPort() + "; SocketAddress: " +
-                Settings.socketAddress(this.socket) + "; RemoteSocketAddress: " + this.socket.getRemoteSocketAddress();
+        return "(Local Hostname & Port: " + getHostname() + ":" + getPort() + "; SocketAddress: " +
+                Settings.socketAddress(this.socket) + "; RemoteSocketAddress: " + this.socket.getRemoteSocketAddress() + ")";
     }
 
 }

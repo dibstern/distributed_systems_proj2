@@ -210,6 +210,7 @@ public class Responder {
                 @Override
                 public void execute(JSONObject json, Connection con) {
                     SessionManager sessionManager = SessionManager.getInstance();
+                    System.out.println("About to us serverRegistry to reconnect: " + sessionManager.getServerRegistry().toString());
                     String closeConnectionContext = "Close Connection Context: Received SERVER_SHUTDOWN (in Responder)";
                     con.setHasLoggedOut(true);
                     if (sessionManager.getServerRegistry().isParentConnection(con)) {
