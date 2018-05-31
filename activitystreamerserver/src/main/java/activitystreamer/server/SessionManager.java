@@ -30,6 +30,7 @@ public class SessionManager extends Thread {
     private static ClientRegistry clientRegistry;
     private final static int REDIRECT_DELAY = 2000; // milliseconds (= 2 seconds)
     private static ConcurrentLinkedQueue<String> deliveries;
+    private static boolean reconnecting;
 
     protected static SessionManager sessionManager = null;
 
@@ -69,6 +70,9 @@ public class SessionManager extends Thread {
             log.fatal("failed to startup a listening thread: " + e1);
             System.exit(-1);
         }
+
+        this.reconnecting = false;
+
         // Initiate a connection with a remote server, if remote hostname is provided
         initiateConnection();
 
@@ -96,6 +100,39 @@ public class SessionManager extends Thread {
             }
         }
     }
+
+    /**
+     * Initiates an outgoing connection with another server, and authenticates itself with that server once the
+     * connection has been established.
+     */
+    public synchronized boolean initiateConnection(ConnectedServer conToTry) {
+
+        String hostname = conToTry.getHostname();
+        Integer port = conToTry.getPort();
+
+        // Make a connection to another server if remote hostname is supplied
+        try {
+            System.out.println("Trying to connect to: " + hostname + ":" + port);
+            Connection con = outgoingConnection(new Socket(hostname, port));
+            authenticate(con);
+            log.info("connected to server on port number " + Settings.getRemotePort());
+            serverRegistry.setConnectedParent(conToTry.getId(), hostname, port, con);
+            return true;
+        }
+        catch (IOException e) {
+            log.error("failed to make connection to " + Settings.getRemoteHostname() + ":" +
+                    Settings.getRemotePort() + " :" + e);
+            return false;
+        }
+    }
+
+    // TODO: This, and/or fix bad sibling server info (Bad str, wrong port) in sibling_servers in AUTHENTICATION_SUCCESS   (Exception in thread "Thread-5" java.lang.IllegalArgumentException: protocol = socket host = null) (Trying to connect to: /192.168.1.154:57724)
+    // TODO: Also, receiving "{"command":"INVALID_MESSAGE","info":"Message received from an unauthenticated server"}" after
+    // TODO:    sending SERVER_ANNOUNCE and NEW_GRANDPARENT messages (should those have been sent?). Note: SERVER_SHUTDOWN
+    // TODO:    also sent (in response to INVALID_MESSAGE, right?
+//    public String cleanHostname(String hostname) {
+//
+//    }
 
     /**
      * Processing incoming messages from a given connection.
@@ -179,27 +216,22 @@ public class SessionManager extends Thread {
         Integer secondsPassed;
         Integer timeoutInterval;
         while (!term) {
-            timeoutInterval = 2;
-            while (timeoutInterval > 0) {
-                try {
-                    secondsPassed = 0;
-                    while (secondsPassed < 5) {
+            try {
+                secondsPassed = 0;
+                while (secondsPassed < 5) {
 
-                        // Deliver queued messages every second
-                        Thread.sleep(Settings.getActivityInterval() / 5);
-                        makeDeliveries();
-                        secondsPassed += 1;
-                    }
+                    // Deliver queued messages every second
+                    Thread.sleep(Settings.getActivityInterval() / 5);
+                    makeDeliveries();
+                    secondsPassed += 1;
                 }
-                catch (InterruptedException e) {
-                    log.info("received an interrupt, system is shutting down");
-                    break;
-                }
-                // Make a serverAnnounce every 5 seconds
-                serverAnnounce();
-                reconnectParentIfDisconnected();
-                timeoutInterval -= 1;
             }
+            catch (InterruptedException e) {
+                log.info("received an interrupt, system is shutting down");
+                break;
+            }
+            // Make a serverAnnounce every 5 seconds
+            serverAnnounce();
         }
         log.info("closing " + connections.size() + " connections");
         // clean up
@@ -207,24 +239,54 @@ public class SessionManager extends Thread {
         listener.setTerm(true);
     }
 
+    /**
+     * We know the parent has been disconnected. Try to reconnect to a different server.
+     */
+    public synchronized void reconnectParentIfDisconnected() {
+        this.reconnecting = true;
+        serverRegistry.setNoParent();
+        boolean reconnected = false;
+        ConcurrentLinkedQueue<ConnectedServer> consToTry = serverRegistry.getConsToTry();
 
-    public void reconnectParentIfDisconnected() {
-//        ConnectedServer parentServer = serverRegistry.getParentInfo();
-//        if (parentServer != null) {
-//            if (parentServer.isTimedOut()) {
-//                Connection parentCon = serverRegistry.getParentConnection();
-//                parentCon.closeCon();
-//
-//                // Settings.setRemoteHostname();
-//                // Settings.getRemotePort();
-//                // initiateConnection();
-//
-//                String msg = MessageProcessor.getGrandparentUpdateMsg(serverRegistry.getParentJson());
-//            }
-//        }
-//        else {
-//
-//        }
+        // Try to reconnect to grandparent
+        ConnectedServer grandparent = serverRegistry.getGrandparent();
+        if (grandparent != null) {
+            reconnected = initiateConnection(grandparent);
+        }
+        boolean rootSibling = serverRegistry.amRootSibling();
+        ConnectedServer conToTry;
+        // If the reconnection didn't work
+        if (!reconnected) {
+
+            // If we're not the root sibling, try to connect to other servers
+            if (!rootSibling) {
+                while (!reconnected && !consToTry.isEmpty()) {
+                    conToTry = consToTry.poll();
+                    reconnected = initiateConnection(conToTry);
+                }
+            }
+        }
+        if (!reconnected && rootSibling) {
+            log.info("This server is the new parent server, allowing other servers to connect to this one.");
+        }
+        else if (!reconnected) {
+            log.info("Unable to reconnect to any new servers. Unrepairable partition.");
+        }
+        // Must have reconnected to the grandparent
+        else {
+            ConnectedServer newParent = serverRegistry.getParentInfo();
+            Connection newParentCon = serverRegistry.getParentConnection();
+            if (newParent != null) {
+                log.info("Succeeded in repairing network partition due to server failure.");
+
+                // Send a "GRANDPARENT_UPDATE" message to children.
+                this.reconnecting = false;
+            }
+        }
+    }
+
+    public boolean isReconnecting() {
+        return this.reconnecting;
     }
 
 
@@ -381,6 +443,9 @@ public class SessionManager extends Thread {
      * @returns true if the connection belongs to a client logged into this server, false otherwise.
      */
     public boolean checkClientLoggedIn(Connection c) {
+        if (c == null) {
+            return false;
+        }
         return clientConnections.containsKey(c);
     }
 
@@ -717,8 +782,9 @@ public class SessionManager extends Thread {
     /** Initiate closure of a given connection and remove from the appropriate array
      * @param c The connection to be closed  */
     public void closeConnection(Connection c, String closeConnectionContext) {
-        c.closeCon();
         deleteClosedConnection(c, closeConnectionContext);
+        c.setHasLoggedOut(true);
+        c.closeCon();
     }
 
     /**
@@ -728,6 +794,9 @@ public class SessionManager extends Thread {
      */
     public synchronized void deleteClosedConnection(Connection con, String closeConnectionContext) {
 
+        if (serverRegistry.isParentConnection(con)) {
+            serverRegistry.setNoParent();
+        }
         if (serverRegistry.isServerCon(con)) {
             serverRegistry.removeCon(con);
         }

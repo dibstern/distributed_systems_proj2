@@ -8,6 +8,7 @@ import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  *
@@ -65,15 +66,12 @@ public class ServerRegistry {
 
     // ------------------------------ PARENT MANAGEMENT ------------------------------
 
-//    public ConnectedServer getNextParent() {
-//
-//    }
-
     public boolean isParentConnection(Connection con) {
         return con.equals(this.parentConnection);
     }
 
     public void setConnectedParent(String id, String hostname, int port, Connection con) {
+        System.out.println("Setting parent connection: " + con);
         if (this.parent != null) {
             all_servers.remove(this.parent.getId());
         }
@@ -82,13 +80,18 @@ public class ServerRegistry {
         if (!all_servers.containsKey(id)) {
             all_servers.put(id, this.parent);
         }
+        System.out.println("this.parentConnection = " + this.parentConnection);
+        server_connections.add(con);
+
+        String msg = MessageProcessor.getGrandparentUpdateMsg(getParentJson());
+        SessionManager.getInstance().forwardServerMsg(con, msg);
     }
 
     public void setNoParent() {
+        System.out.println("Removing Parent Connection" + this.parentConnection);
         all_servers.remove(this.parent.getId());
         this.parent = null;
         this.parentConnection = null;
-        SessionManager.getInstance().reconnectParentIfDisconnected();
     }
 
     // ------------------------------ CHILD MANAGEMENT ------------------------------
@@ -200,39 +203,32 @@ public class ServerRegistry {
     public void removeCon(Connection con) {
         con.writeMsg(MessageProcessor.getShutdownMessage());
         server_connections.remove(con);
-        if (this.parentConnection.equals(con)) {
+        if (this.parentConnection != null && this.parentConnection.equals(con)) {
             setNoParent();
         }
-        else if (connectedChildServers.get(this.child_root).equals(con)) {
+        else if (this.child_root != null && connectedChildServers.containsKey(this.child_root) &&
+                connectedChildServers.get(this.child_root).equals(con)) {
             setNextRootChild();
         }
         else {
             siblings_list.removeIf((s) ->
                     con.getHostname().equals(s.getHostname()) && con.getPort().equals(s.getPort()));
         }
+        // TODO: Do we want to also remove the record?
+        // removeFromAllServers(con);
     }
 
-    public void removeNotConnectedServer(ConnectedServer s) {
-        if (grandparent == s) {
-            setNoGrandparent();
+    public void removeFromAllServers(Connection con) {
+        for (String sid : all_servers.keySet()) {
+            ConnectedServer server = all_servers.get(sid);
+            if (con.getHostname().equals(server.getHostname()) && con.getPort().equals(server.getPort())) {
+                all_servers.remove(sid);
+                break;
+            }
         }
-        if (parent == s) {
-            setNoParent();
-        }
-        if (child_root == s) {
-            setNoChildRoot();
-        }
-        siblings_list.removeIf((sibling) -> s.equals(sibling));
     }
 
     // ---------------------------------- GETTERS ----------------------------------
-    public Connection getParentConnection() {
-        return parentConnection;
-    }
-
-    public ConnectedServer getParentInfo() {
-        return parent;
-    }
 
     public JSONObject getParentJson() {
 
@@ -264,6 +260,48 @@ public class ServerRegistry {
         return thisJson;
     }
 
+    public ConcurrentLinkedQueue<ConnectedServer> getConsToTry() {
+        ConcurrentLinkedQueue<ConnectedServer> consToTry = new ConcurrentLinkedQueue<ConnectedServer>();
+
+        // Add all other siblings, if we are not the root sibling
+        if (!amRootSibling()) {
+            siblings_list.forEach((sibling) -> {
+                if (sibling != this.this_server) {
+                    tryToAdd(consToTry, sibling);
+                }
+            });
+        }
+
+        // Add all remaining servers that aren't already included and that aren't children
+        all_servers.forEach((id, server) -> {
+            if (!consToTry.contains(server) && !server.isChild()) {
+                tryToAdd(consToTry, server);
+            }
+        });
+        return consToTry;
+    }
+
+    public boolean amRootSibling() {
+        return (siblings_list.size() > 1 && siblings_list.get(0).equals(this_server));
+    }
+
+    public ConcurrentLinkedQueue<ConnectedServer> tryToAdd(ConcurrentLinkedQueue<ConnectedServer> servers, ConnectedServer server) {
+        if (server != null) {
+            servers.add(server);
+        }
+        return servers;
+    }
+
+
+
+    public Connection getParentConnection() {
+        return parentConnection;
+    }
+
+    public ConnectedServer getParentInfo() {
+        return parent;
+    }
+
 
     public boolean isServerConnection(Connection con) {
         return server_connections.contains(con);
@@ -286,6 +324,7 @@ public class ServerRegistry {
 
     public void disconnectServer(Connection con) {
         removeCon(con);
+        con.setHasLoggedOut(true);
         con.closeCon();
     }
 
@@ -315,5 +354,23 @@ public class ServerRegistry {
             }
         });
     }
+
+
+    public void removeNotConnectedServer(ConnectedServer s) {
+        if (grandparent == s) {
+            setNoGrandparent();
+        }
+        if (parent == s) {
+            setNoParent();
+        }
+        if (child_root == s) {
+            setNoChildRoot();
+        }
+        siblings_list.removeIf((sibling) -> s.equals(sibling));
+
+        // TODO: Do we want to delete records?
+        // all_servers.remove(c.getId());
+    }
+
 
 }

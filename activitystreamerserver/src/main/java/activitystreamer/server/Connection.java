@@ -97,6 +97,8 @@ public class Connection extends Thread {
                     // do nothing
                 }
                 finally {
+                    // Sleep for 2 seconds to allow the receipt of shutdown messages to prompt servers to close connections gracefully
+                    // SessionManager.getInstance().delayThread(2000);
                     term = true;
                     inreader.close();
                     out.close();
@@ -118,8 +120,7 @@ public class Connection extends Thread {
      * TODO: Insert while(retry) loop and a 2 sec delay after a broken network connection
      */
     public void run() {
-        // boolean retry = true;
-        // while (retry) {
+
         try {
             String data;
             while (!term && (data = inreader.readLine()) != null) {
@@ -133,16 +134,30 @@ public class Connection extends Thread {
             SessionManager.getInstance().ensureLogoutDisconnectedClient(this);
 
             String closeContext = "Close Connection Context: connection closed naturally (in run, in Connection)";
+            // retry = false;
+            // Connection is crashed, not closed gracefully. Thus, reconnect to a new parent
+            if (SessionManager.getInstance().getServerRegistry().isParentConnection(this) &&
+                    !SessionManager.getInstance().isReconnecting()) {
+                SessionManager.getInstance().reconnectParentIfDisconnected();
+            }
             SessionManager.getInstance().deleteClosedConnection(this, closeContext);
             in.close();
-            // retry = false;
+
         }
         catch (IOException e) {
             log.error("connection " + Settings.socketAddress(socket) + " closed with exception: " + e);
             String closeContext = "Close Connection Context: connection closed with exception (in run, in Connection)";
-            SessionManager.getInstance().deleteClosedConnection(this, closeContext);
+            System.out.println(closeContext);
+            boolean isParent = SessionManager.getInstance().getServerRegistry().isParentConnection(this);
+            System.out.println("Is this parent connection? Answer: " + isParent);
+            if (isParent && !SessionManager.getInstance().isReconnecting()) {
+                SessionManager.getInstance().reconnectParentIfDisconnected();
+            }
         }
-        open = false;
+        finally {
+            open = false;
+            // SessionManager.getInstance().reconnectParentIfDisconnected();
+        }
     }
 
     public boolean isOpen() {
@@ -176,11 +191,14 @@ public class Connection extends Thread {
     }
 
     public Integer getPort() {
-        return this.socket.getPort();
+        return this.socket.getLocalPort();
+        // return this.socket.getPort()
     }
 
     public String getHostname() {
-        return this.socket.getInetAddress().toString();
+        String localAddress = this.socket.getLocalAddress().toString();
+        return localAddress.replaceAll("[\\,/]", "");
+        // return this.socket.getInetAddress().toString();
     }
 
 }

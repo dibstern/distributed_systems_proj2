@@ -206,15 +206,15 @@ public class Responder {
                     }
                 }
             });
-
             responses.put("SERVER_SHUTDOWN", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
                     SessionManager sessionManager = SessionManager.getInstance();
                     String closeConnectionContext = "Close Connection Context: Received SERVER_SHUTDOWN (in Responder)";
                     con.setHasLoggedOut(true);
-                    sessionManager.closeConnection(con, closeConnectionContext);
-                    sessionManager.reconnectParentIfDisconnected();
+                    if (sessionManager.getServerRegistry().isParentConnection(con)) {
+                        sessionManager.reconnectParentIfDisconnected();
+                    }
                 }
             });
 

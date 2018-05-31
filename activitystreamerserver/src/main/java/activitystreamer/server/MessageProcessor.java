@@ -69,8 +69,11 @@ public class MessageProcessor {
                 return (json.containsKey("new_grandparent") ? null : missingFieldMsg);
             case "SIBLING_UPDATE":
                 return (json.containsKey("new_sibling") ? null : missingFieldMsg);
+
+            // TODO: CONFIRM FIELDS OF AUTHENTICATION_SUCCESS
             case "AUTHENTICATION_SUCCESS":
-                return (isValidServerAuthMsg && json.containsKey("") ? null : missingFieldMsg);           // TODO: CONFIRM FIELDS OF AUTHENTICATION_SUCCESS
+                return (isValidServerAuthMsg && json.containsKey("id") && json.containsKey("hostname") &&
+                        json.containsKey("port") ? null : missingFieldMsg);
             case "AUTHENTICATE":
                 return (containsSecret && isValidServerAuthMsg ? null : missingFieldMsg);
             case "SERVER_ANNOUNCE":
