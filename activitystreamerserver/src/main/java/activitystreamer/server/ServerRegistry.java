@@ -383,11 +383,19 @@ public class ServerRegistry {
     @Override
     public String toString() {
         return "{\nserver_connections: " + serverConnectionsString() + "unauthorised_connections: " + unAuthConStr() +
-            "grandparent: " + grandparent.toString() +
-                ", parent: " + parent.toString() + ", parentConnection: " + parentConnection.toString() +
-                ", child_root: " + child_root.toString() + ", this_server: " + this_server + ", " +
+                ", grandparent: " + strOrNull(grandparent) +
+                ", parent: " + strOrNull(parent) + ", parentConnection: " + strOrNull(parentConnection) +
+                ", child_root: " + strOrNull(child_root) + ", this_server: " + strOrNull(this_server) + ", " +
                 ", sibling_list: " + siblingListStr() + ", connectedChildServers: " + connectedChildServStr() +
                 ", all_servers: " + allServersStr() + "}";
+    }
+
+    public String strOrNull(ConnectedServer server) {
+        return (server != null ? server.toString() : "null");
+    }
+
+    public String strOrNull(Connection con) {
+        return (con != null ? con.toString() : "null");
     }
 
     public String serverConnectionsString() {
