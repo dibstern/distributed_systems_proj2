@@ -402,7 +402,7 @@ public class ServerRegistry {
         StringBuilder str = new StringBuilder();
         str.append("{");
         server_connections.forEach((con, server) -> {
-            str.append("\n" + con.toString() + " : " + server.toString() + ",\n");
+            str.append(con.toString() + " : " + server.toString() + ",\n");
         });
         str.append("}\n");
         return str.toString();
@@ -412,7 +412,7 @@ public class ServerRegistry {
         StringBuilder str = new StringBuilder();
         str.append("{");
         unauthorised_connections.forEach((con) -> {
-            str.append("\n" + con.toString() + ",\n");
+            str.append(con.toString() + ",\n");
         });
         str.append("}\n");
         return str.toString();
@@ -422,7 +422,7 @@ public class ServerRegistry {
         StringBuilder str = new StringBuilder();
         str.append("{");
         siblings_list.forEach((sibling) -> {
-            str.append("\n" + sibling.toString() + ",\n");
+            str.append(sibling.toString() + ",\n");
         });
         str.append("}\n");
         return str.toString();
@@ -432,7 +432,7 @@ public class ServerRegistry {
         StringBuilder str = new StringBuilder();
         str.append("{");
         connectedChildServers.forEach((child, con) -> {
-            str.append("\n" + child.toString() + " : " + con.toString() + ",\n");
+            str.append(child.toString() + " : " + con.toString() + ",\n");
         });
         str.append("}\n");
         return str.toString();
@@ -442,7 +442,7 @@ public class ServerRegistry {
         StringBuilder str = new StringBuilder();
         str.append("{");
         all_servers.forEach((id, server) -> {
-            str.append("\n" + id + " : " + server.toString() + ",\n");
+            str.append(id + " : " + server.toString() + ",\n");
         });
         str.append("}\n");
         return str.toString();
