@@ -15,7 +15,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  */
 public class ServerRegistry {
 
-    private ArrayList<Connection> server_connections;
+    private ConcurrentHashMap<Connection, ConnectedServer> server_connections;
+    private ArrayList<Connection> unauthorised_connections;
     private ConnectedServer grandparent;
     private ConnectedServer parent;
     private ConnectedServer child_root;
@@ -33,7 +34,8 @@ public class ServerRegistry {
         this.siblings_list.add(this_server);
         this.parent = null;
         this.parentConnection = null;
-        this.server_connections = new ArrayList<Connection>();
+        this.server_connections = new ConcurrentHashMap<Connection, ConnectedServer>();
+        this.unauthorised_connections = new ArrayList<Connection>();
         this.all_servers = new ConcurrentHashMap<String, ConnectedServer>();
     }
 
@@ -57,6 +59,7 @@ public class ServerRegistry {
         }
         else {
             ConnectedServer newConnectedServer = new ConnectedServer(id, hostname, port, isChild, false);
+            System.out.println("Updating Registry -> Adding connection to server_connections: " + hostname + ":" + port);
             all_servers.put(id, newConnectedServer);
         }
         if (!isChild) {
@@ -70,7 +73,7 @@ public class ServerRegistry {
         return con.equals(this.parentConnection);
     }
 
-    public void setConnectedParent(String id, String hostname, int port, Connection con) {
+    public ConnectedServer setConnectedParent(String id, String hostname, int port, Connection con) {
         System.out.println("Setting parent connection: " + con);
         if (this.parent != null) {
             all_servers.remove(this.parent.getId());
@@ -78,13 +81,17 @@ public class ServerRegistry {
         this.parent = new ConnectedServer(id, hostname, port, false, true);
         this.parentConnection = con;
         if (!all_servers.containsKey(id)) {
+            System.out.println("Setting connected Parent -> Adding connection to server_connections: " + port);
             all_servers.put(id, this.parent);
         }
         System.out.println("this.parentConnection = " + this.parentConnection);
-        server_connections.add(con);
+        unauthorised_connections.remove(con);
+        server_connections.put(con, this.parent);
 
         String msg = MessageProcessor.getGrandparentUpdateMsg(getParentJson());
         SessionManager.getInstance().forwardServerMsg(con, msg);
+
+        return this.parent;
     }
 
     public void setNoParent() {
@@ -92,6 +99,7 @@ public class ServerRegistry {
         all_servers.remove(this.parent.getId());
         this.parent = null;
         this.parentConnection = null;
+        // TODO: Is the server_connections being
     }
 
     // ------------------------------ CHILD MANAGEMENT ------------------------------
@@ -100,16 +108,18 @@ public class ServerRegistry {
         return child_root != null;
     }
 
-    public ConnectedServer addRootChild(Connection con) {
-        child_root = new ConnectedServer(con, true, false);
+    public ConnectedServer addRootChild(Connection con, String id, String hostname, Integer port) {
+        System.out.println("Adding Root Child -> Adding connection to server_connections: " + port);
+        child_root = new ConnectedServer(id, hostname, port, true, false);
         all_servers.put(child_root.getId(), child_root);
-        server_connections.add(con);
+        server_connections.put(con, child_root);
         connectedChildServers.put(child_root, con);
         return child_root;
     }
 
-    public ConnectedServer addConnectedChild(Connection con) {
-        ConnectedServer childServer = new ConnectedServer(con, true, false);
+    public ConnectedServer addConnectedChild(Connection con, String id, String hostname, Integer port) {
+        ConnectedServer childServer = new ConnectedServer(id, hostname, port, true, false);
+        System.out.println("Adding Connected Child -> Adding connection to server_connections: " + port);
         all_servers.put(childServer.getId(), childServer);
         connectedChildServers.put(childServer, con);
         return childServer;
@@ -153,6 +163,7 @@ public class ServerRegistry {
             sibling.setIsSibling(true);
 
             if (!all_servers.containsKey(sibling.getId())) {
+                System.out.println("Adding Siblings List -> Adding connection to server_connections: " + sibling.getPort());
                 all_servers.put(sibling.getId(), sibling);
             }
         });
@@ -165,6 +176,8 @@ public class ServerRegistry {
         this.siblings_list.add(sibling);
         Collections.sort(this.siblings_list);
         if (!all_servers.containsKey(sibling.getId())) {
+
+            System.out.println("Adding Siblings -> Adding connection to server_connections: " + sibling.getPort());
             all_servers.put(sibling.getId(), sibling);
         }
     }
@@ -175,7 +188,7 @@ public class ServerRegistry {
         return all_servers.size();
     }
 
-    public ArrayList<Connection> getServerConnections() {
+    public ConcurrentHashMap<Connection, ConnectedServer> getServerConnections() {
         return server_connections;
     }
 
@@ -184,17 +197,17 @@ public class ServerRegistry {
     }
 
     public void addServerCon(Connection con) {
-        server_connections.add(con);
+        unauthorised_connections.add(con);
     }
 
     public boolean isServerCon(Connection con) {
-        return server_connections.contains(con);
+        return server_connections.containsKey(con);
     }
 
     // ------------------------------ CONNECTION CLOSING ------------------------------
 
     public void closeServerCons() {
-        server_connections.forEach((con) -> {
+        server_connections.forEach((con, server) -> {
             con.writeMsg(MessageProcessor.getShutdownMessage());
         });
         server_connections.clear();
@@ -292,8 +305,6 @@ public class ServerRegistry {
         return servers;
     }
 
-
-
     public Connection getParentConnection() {
         return parentConnection;
     }
@@ -301,14 +312,6 @@ public class ServerRegistry {
     public ConnectedServer getParentInfo() {
         return parent;
     }
-
-
-    public boolean isServerConnection(Connection con) {
-        return server_connections.contains(con);
-    }
-
-
-
 
     public void setChildRoot(JSONObject newSiblingRoot ) {
         this.child_root = createNewRecord(newSiblingRoot, false, false);

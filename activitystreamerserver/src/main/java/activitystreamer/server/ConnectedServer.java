@@ -32,16 +32,6 @@ public class ConnectedServer implements Comparable<ConnectedServer> {
         this.is_connected = true;
     }
 
-    public ConnectedServer(Connection con, boolean isChild, boolean isParent) {
-        this.id = Settings.nextSecret();
-        this.load = 0;
-        this.hostname = con.getHostname();
-        this.port = con.getPort();
-        this.is_child = isChild;
-        this.is_parent = isParent;
-        this.is_sibling = false;
-    }
-
     public void updateServer(int load, boolean isChild) {
         setLoad(load);
         this.last_announce = LocalDateTime.now();

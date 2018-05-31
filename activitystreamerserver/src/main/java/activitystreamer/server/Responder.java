@@ -226,7 +226,11 @@ public class Responder {
                 public void execute(JSONObject json, Connection con) {
 
                     // Authenticate the server and set child (root or otherwise)
-                    SessionManager.getInstance().authenticateIncomingSever((String) json.get("secret"), con);
+                    String id = json.get("id").toString();
+                    String hostname = json.get("hostname").toString();
+                    Integer port = ((Long)json.get("port")).intValue();
+                    String secret = (String) json.get("secret");
+                    SessionManager.getInstance().authenticateIncomingSever(secret, con, id, hostname, port);
 
                     // Accept the registry and use it to update ours (as part of the handshake)
                     JSONArray registry = (JSONArray) json.get("registry");

@@ -398,10 +398,13 @@ public class MessageProcessor {
      * @param secret The secret a server is trying to authenticate with
      * @param clientRecordsJson The ClientRegistry as a JSONArray in a JSON object -> {"registry" : JSONArray[...]}
      * @return msg the message to be sent to the parent server */
-    public static String getAuthenticateMsg(String secret, JSONObject clientRecordsJson) {
+    public static String getAuthenticateMsg(String secret, JSONObject clientRecordsJson, String id, String hostname, Integer port) {
         JSONObject msg = new JSONObject();
         msg.put("command", "AUTHENTICATE");
         msg.put("secret", secret);
+        msg.put("id", id);
+        msg.put("hostname", hostname);
+        msg.put("port", port);
 
         // Adds all mappings in clientRecordsJson to msg (only "registry" is mapped to a value)
         msg.putAll(clientRecordsJson);

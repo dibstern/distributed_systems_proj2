@@ -368,14 +368,15 @@ public class SessionManager extends Thread {
      * Sends an AUTHENTICATE message to that server with its secret.
      * @param c The connection the authenticate message will be send on **/
     public void authenticate(Connection c) {
-        String msg = MessageProcessor.getAuthenticateMsg(Settings.getSecret(), clientRegistry.getRecordsJson());
+        String msg = MessageProcessor.getAuthenticateMsg(Settings.getSecret(), clientRegistry.getRecordsJson(), serverId,
+                                                         Settings.getLocalHostname(), Settings.getLocalPort());
         c.writeMsg(msg);
     }
 
     /** Authenticates a new server from incoming connection
      * @param incomingSecret The secret supplied by the authenticating server
      * @param c The connection a server is trying to authenticate on **/
-    public boolean authenticateIncomingSever(String incomingSecret, Connection c) {
+    public boolean authenticateIncomingSever(String incomingSecret, Connection c, String id, String hostname, Integer port) {
 
         // Check if secret matches the secret of this server
         if (!Settings.getSecret().equals(incomingSecret)) {
@@ -389,10 +390,10 @@ public class SessionManager extends Thread {
             ConnectedServer newChild;
             connections.remove(c);
             if (serverRegistry.hasRootChild()) {
-                newChild = serverRegistry.addConnectedChild(c);
+                newChild = serverRegistry.addConnectedChild(c, id, hostname, port);
             }
             else {
-                newChild = serverRegistry.addRootChild(c);
+                newChild = serverRegistry.addRootChild(c, id, hostname, port);
             }
             serverAuthenticateSuccess(c, newChild);
             return true;
@@ -725,7 +726,7 @@ public class SessionManager extends Thread {
      * @param msg The message to be sent across the network **/
     public void broadcastMessage(Connection c, String msg) {
         // Broadcast the message to all servers
-        for (Connection curr: serverRegistry.getServerConnections()) {
+        for (Connection curr: serverRegistry.getServerConnections().keySet()) {
             if (curr != c) {
                 curr.writeMsg(msg);
             }
@@ -741,7 +742,7 @@ public class SessionManager extends Thread {
     /** Sends a message to all of the servers a given server has a direct connection to.
      * @param msg The message to be sent **/
     public void serverBroadcast(String msg) {
-        for (Connection c: serverRegistry.getServerConnections()) {
+        for (Connection c: serverRegistry.getServerConnections().keySet()) {
             c.writeMsg(msg);
         }
     }
@@ -751,7 +752,7 @@ public class SessionManager extends Thread {
      * @param c The connection that should NOT have the message sent to
      * @param msg The message to be sent **/
     public void forwardServerMsg(Connection c, String msg) {
-        for (Connection con: serverRegistry.getServerConnections()) {
+        for (Connection con: serverRegistry.getServerConnections().keySet()) {
             if (con != c) {
                 con.writeMsg(msg);
             }
@@ -798,6 +799,7 @@ public class SessionManager extends Thread {
             serverRegistry.setNoParent();
         }
         if (serverRegistry.isServerCon(con)) {
+
             serverRegistry.removeCon(con);
         }
         else if (clientConnections.containsKey(con)) {
