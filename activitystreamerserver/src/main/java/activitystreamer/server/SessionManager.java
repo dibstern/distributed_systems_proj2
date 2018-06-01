@@ -244,13 +244,13 @@ public class SessionManager extends Thread {
      */
     public synchronized void reconnectParentIfDisconnected() {
         this.reconnecting = true;
-        serverRegistry.setNoParent();
         boolean reconnected = false;
         ConcurrentLinkedQueue<ConnectedServer> consToTry = serverRegistry.getConsToTry();
 
         // Try to reconnect to grandparent
         ConnectedServer grandparent = serverRegistry.getGrandparent();
         if (grandparent != null) {
+            log.info("Should be connecting to grandparent here.");
             reconnected = initiateConnection(grandparent);
         }
         boolean rootSibling = serverRegistry.amRootSibling();
@@ -424,7 +424,9 @@ public class SessionManager extends Thread {
         String msg = MessageProcessor.getAuthenticationSuccessMsg(clientRegistry.getRecordsJson(),
                                                                   serverRegistry.toJson(),
                                                                   Settings.getLocalHostname(),
-                                                                  Settings.getLocalPort(), serverId);
+                                                                  Settings.getLocalPort(), serverId,
+                                                                  serverRegistry.getParentJson(),
+                                                                  serverRegistry.childListToJson());
         con.writeMsg(msg);
 
         // Update other child servers with their new sibling!
@@ -803,18 +805,32 @@ public class SessionManager extends Thread {
      */
     public synchronized void deleteClosedConnection(Connection con, String closeConnectionContext) {
 
-        if (serverRegistry.isParentConnection(con)) {
-            serverRegistry.setNoParent();
-        }
-        if (serverRegistry.isServerCon(con)) {
-
-            serverRegistry.removeCon(con);
-        }
-        else if (clientConnections.containsKey(con)) {
+//        if (serverRegistry.isParentConnection(con)) {
+//            serverRegistry.setNoParent();
+//        }
+//        if (serverRegistry.isServerCon(con)) {
+//
+//            serverRegistry.removeCon(con);
+//        }
+        if (clientConnections.containsKey(con)) {
             // Close connection to another client
+            // Generate appropriate logout broadcast, depending on if client was registered or anonymous
+            ConnectedClient client = getConnectedClient(con);
+
+            if (client.getUsername().contains("anonymous")) {
+                // Client connection anonymous
+                String msg = MessageProcessor.getAnonLogoutBroadcast(client.getUsername(), client.getSecret());
+                serverBroadcast(msg);
+            }
+            else {
+                // Client was registered -- need to get client token
+                String msg = MessageProcessor.getLogoutBroadcast(client.getUsername(), client.getSecret(),
+                                                    clientRegistry.getClientToken(client));
+                serverBroadcast(msg);
+            }
+
             clientConnections.remove(con);
 
-            // TODO: Logout Anonymous Clients (Not here?)
         }
         else {
             // Closing the connection to an unauthenticated server/client not logged in

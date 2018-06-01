@@ -405,7 +405,6 @@ public class MessageProcessor {
         msg.put("id", id);
         msg.put("hostname", hostname);
         msg.put("port", port);
-
         // Adds all mappings in clientRecordsJson to msg (only "registry" is mapped to a value)
         msg.putAll(clientRecordsJson);
         return msg.toString();
@@ -435,14 +434,32 @@ public class MessageProcessor {
         return msg.toString();
     }
 
+    public static String getSiblingCrashed(JSONObject siblingCrashed) {
+        JSONObject msg = new JSONObject();
+        msg.put("command", "SIBLING_CRASHED");
+        msg.putAll(siblingCrashed);
+        return msg.toString();
+    }
+
     public static String getAuthenticationSuccessMsg(JSONObject clientRecordsJson, JSONObject serverRegistryJson,
-                                                     String hostname, int port, String id) {
+                                                     String hostname, int port, String id, JSONObject grandparent,
+                                                     JSONObject siblingList) {
         JSONObject msg = new JSONObject();
         msg.put("command", "AUTHENTICATION_SUCCESS");
         msg.put("hostname", hostname);
         msg.put("port", port);
         msg.put("id", id);
-        msg.putAll(serverRegistryJson);
+
+        if (serverRegistryJson != null)
+        {
+            msg.putAll(serverRegistryJson);
+        }
+        if (grandparent != null) {
+            msg.putAll(grandparent);
+        }
+        if (siblingList != null) {
+            msg.putAll(siblingList);
+        }
 
         // Adds all mappings in clientRecordsJson to msg (only "registry" is mapped to a value)
         msg.putAll(clientRecordsJson);

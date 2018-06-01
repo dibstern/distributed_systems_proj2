@@ -24,6 +24,7 @@ public class ServerRegistry {
     private ConnectedServer child_root;
     private ConnectedServer this_server;
     private ArrayList<ConnectedServer> siblings_list;
+    private ConnectedServer rootSibling;
     private ConcurrentHashMap<ConnectedServer, Connection> connectedChildServers;
     private ConcurrentHashMap<String, ConnectedServer> all_servers;
 
@@ -38,14 +39,16 @@ public class ServerRegistry {
         this.server_connections = new ConcurrentHashMap<Connection, ConnectedServer>();
         this.unauthorised_connections = new ArrayList<Connection>();
         this.all_servers = new ConcurrentHashMap<String, ConnectedServer>();
+        this.rootSibling = null;
     }
 
-    private ConnectedServer createNewRecord(JSONObject record, boolean isChild, boolean isParent) {
+    public ConnectedServer createNewRecord(JSONObject record, boolean isChild, boolean isParent) {
         String id = record.get("id").toString();
         String hostname = record.get("hostname").toString();
         Integer port = ((Long) record.get("port")).intValue();
         return new ConnectedServer(id, hostname, port, isChild, isParent);
     }
+
 
     /** SERVER_ANNOUNCE message received. Update information about that server.
      *
@@ -113,9 +116,13 @@ public class ServerRegistry {
     public ConnectedServer addRootChild(Connection con, String id, String hostname, Integer port) {
         System.out.println("Adding Root Child -> Adding connection to server_connections: " + port);
         child_root = new ConnectedServer(id, hostname, port, true, false);
+        System.out.println("made a child_root");
         all_servers.put(child_root.getId(), child_root);
+        System.out.println("added to all servers");
         server_connections.put(con, child_root);
+        System.out.println("added to server connections");
         connectedChildServers.put(child_root, con);
+        System.out.println("added to connected child servers");
         return child_root;
     }
 
@@ -174,6 +181,7 @@ public class ServerRegistry {
             }
         });
         Collections.sort(this.siblings_list);
+//        setRootSibling(siblings_list.get(0));
     }
 
     public void addSibling(JSONObject siblingJson) {
@@ -187,6 +195,43 @@ public class ServerRegistry {
             all_servers.put(sibling.getId(), sibling);
         }
     }
+
+    public void setRootSibling() {
+        this.rootSibling = siblings_list.get(0);
+    }
+
+    public void removeCrashedParent() {
+        all_servers.remove(this.parent);
+        server_connections.remove(this.parent);
+        this.parent = null;
+    }
+
+    public void removeCrashedChild(ConnectedServer crashedChild) {
+        all_servers.remove(crashedChild);
+        server_connections.remove(crashedChild);
+        connectedChildServers.remove(crashedChild);
+
+        if (child_root.equals(crashedChild))
+        {
+            setNextRootChild();
+        }
+    }
+
+    public void removeCrashedSibling(ConnectedServer crashedSibling) {
+        all_servers.remove(crashedSibling);
+        server_connections.remove(crashedSibling);
+        siblings_list.remove(crashedSibling);
+
+        if (rootSibling.equals(crashedSibling))
+        {
+            setRootSibling();
+        }
+    }
+
+    public ConnectedServer getServerFromCon(Connection con) {
+        return server_connections.get(con);
+    }
+
 
     // ------------------------------ GENERAL ------------------------------
 
@@ -219,33 +264,33 @@ public class ServerRegistry {
         server_connections.clear();
     }
 
-    public void removeCon(Connection con) {
-        con.writeMsg(MessageProcessor.getShutdownMessage());
-        server_connections.remove(con);
-        if (this.parentConnection != null && this.parentConnection.equals(con)) {
-            setNoParent();
-        }
-        else if (this.child_root != null && connectedChildServers.containsKey(this.child_root) &&
-                connectedChildServers.get(this.child_root).equals(con)) {
-            setNextRootChild();
-        }
-        else {
-            siblings_list.removeIf((s) ->
-                    con.getHostname().equals(s.getHostname()) && con.getPort().equals(s.getPort()));
-        }
-        // TODO: Do we want to also remove the record?
-        // removeFromAllServers(con);
-    }
-
-    public void removeFromAllServers(Connection con) {
-        for (String sid : all_servers.keySet()) {
-            ConnectedServer server = all_servers.get(sid);
-            if (con.getHostname().equals(server.getHostname()) && con.getPort().equals(server.getPort())) {
-                all_servers.remove(sid);
-                break;
-            }
-        }
-    }
+//    public void removeCon(Connection con) {
+//        con.writeMsg(MessageProcessor.getShutdownMessage());
+//        server_connections.remove(con);
+//        if (this.parentConnection != null && this.parentConnection.equals(con)) {
+//            setNoParent();
+//        }
+//        else if (this.child_root != null && connectedChildServers.containsKey(this.child_root) &&
+//                connectedChildServers.get(this.child_root).equals(con)) {
+//            setNextRootChild();
+//        }
+//        else {
+//            siblings_list.removeIf((s) ->
+//                    con.getHostname().equals(s.getHostname()) && con.getPort().equals(s.getPort()));
+//        }
+//        // TODO: Do we want to also remove the record?
+//        removeFromAllServers(con);
+//    }
+//
+//    public void removeFromAllServers(Connection con) {
+//        for (String sid : all_servers.keySet()) {
+//            ConnectedServer server = all_servers.get(sid);
+//            if (con.getHostname().equals(server.getHostname()) && con.getPort().equals(server.getPort())) {
+//                all_servers.remove(sid);
+//                break;
+//            }
+//        }
+//    }
 
     // ---------------------------------- GETTERS ----------------------------------
 
@@ -323,7 +368,7 @@ public class ServerRegistry {
     }
 
     public void setChildRoot(JSONObject newSiblingRoot ) {
-        this.child_root = createNewRecord(newSiblingRoot, false, false);
+        this.rootSibling = createNewRecord(newSiblingRoot, false, false);
     }
 
     public ConnectedServer getGrandparent() {
@@ -334,11 +379,11 @@ public class ServerRegistry {
         return child_root;
     }
 
-    public void disconnectServer(Connection con) {
-        removeCon(con);
-        con.setHasLoggedOut(true);
-        con.closeCon();
-    }
+//    public void disconnectServer(Connection con) {
+//        removeCon(con);
+//        con.setHasLoggedOut(true);
+//        con.closeCon();
+//    }
 
     public JSONObject allServersToJson() {
         ArrayList<JSONObject> all_servers_jsons = new ArrayList<JSONObject>();
@@ -368,21 +413,21 @@ public class ServerRegistry {
     }
 
 
-    public void removeNotConnectedServer(ConnectedServer s) {
-        if (grandparent == s) {
-            setNoGrandparent();
-        }
-        if (parent == s) {
-            setNoParent();
-        }
-        if (child_root == s) {
-            setNoChildRoot();
-        }
-        siblings_list.removeIf((sibling) -> s.equals(sibling));
-
-        // TODO: Do we want to delete records?
-        // all_servers.remove(c.getId());
-    }
+//    public void removeNotConnectedServer(ConnectedServer s) {
+//        if (grandparent == s) {
+//            setNoGrandparent();
+//        }
+//        if (parent == s) {
+//            setNoParent();
+//        }
+//        if (child_root == s) {
+//            setNoChildRoot();
+//        }
+//        siblings_list.removeIf((sibling) -> s.equals(sibling));
+//
+//        // TODO: Do we want to delete records?
+//        // all_servers.remove(c.getId());
+//    }
 
 
     @Override

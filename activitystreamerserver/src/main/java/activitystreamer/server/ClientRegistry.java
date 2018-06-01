@@ -267,6 +267,12 @@ public class ClientRegistry {
         return ackMessages;
     }
 
+    public Integer getClientToken(ConnectedClient client)
+    {
+        ClientRecord tmp = clientRecords.get(client.getUsername());
+        return tmp.getToken();
+    }
+
 
 
     public JSONObject sendWaitingMessages(Connection con, String recipient, String sender) {

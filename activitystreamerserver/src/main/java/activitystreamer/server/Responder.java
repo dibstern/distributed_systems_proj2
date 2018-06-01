@@ -5,6 +5,7 @@ package activitystreamer.server;
  * Inspects every message received by a server to ensure it is valid, and has been sent by an authenticated server or
  * logged in client. Then tells the server what to do with the message.  */
 
+import activitystreamer.Server;
 import activitystreamer.util.ServerCommand;
 import activitystreamer.util.Response;
 import activitystreamer.util.Settings;
@@ -210,11 +211,24 @@ public class Responder {
                 @Override
                 public void execute(JSONObject json, Connection con) {
                     SessionManager sessionManager = SessionManager.getInstance();
-                    System.out.println("About to us serverRegistry to reconnect: " + sessionManager.getServerRegistry().toString());
+                    ServerRegistry serverRegistry = sessionManager.getServerRegistry();
+                    System.out.println("About to use serverRegistry to reconnect: " + sessionManager.getServerRegistry().toString());
                     String closeConnectionContext = "Close Connection Context: Received SERVER_SHUTDOWN (in Responder)";
                     con.setHasLoggedOut(true);
-                    if (sessionManager.getServerRegistry().isParentConnection(con)) {
+                    if (serverRegistry.isParentConnection(con)) {
+                        serverRegistry.removeCrashedParent();
                         sessionManager.reconnectParentIfDisconnected();
+                    }
+                    else {
+                        // Connection was a child connection
+                        ConnectedServer server = serverRegistry.getServerFromCon(con);
+                        serverRegistry.removeCrashedChild(server);
+                        // Alert child connections that sibling has crashed
+                        String childCrashed = MessageProcessor.getGson().toJson(server);
+                        JSONObject crashedSibling = MessageProcessor.toJson(childCrashed, false,
+                                                                            "crashed_sibling");
+                        String msg = MessageProcessor.getSiblingCrashed(crashedSibling);
+                        sessionManager.forwardToChildren(msg);
                     }
                 }
             });
@@ -292,6 +306,19 @@ public class Responder {
                     ServerRegistry serverRegistry = SessionManager.getInstance().getServerRegistry();
                     JSONObject siblingRecord = (JSONObject) json.get("new_sibling");
                     serverRegistry.addSibling(siblingRecord);
+                }
+            });
+            /* ... */
+            responses.put("SIBLING_CRASHED", new ServerCommand() {
+                @Override
+                public void execute(JSONObject json, Connection con) {
+                    ServerRegistry serverRegistry = SessionManager.getInstance().getServerRegistry();
+                    JSONObject siblingRecord = (JSONObject) json.get("crashed_sibling");
+                    String id = siblingRecord.get("id").toString();
+                    String hostname = siblingRecord.get("hostname").toString();
+                    Integer port = (int) siblingRecord.get("port");
+                    ConnectedServer tmp = new ConnectedServer(id, hostname, port, false, false);
+                    serverRegistry.removeCrashedSibling(tmp);
                 }
             });
             responses.put("ANON_CONFIRM", new ServerCommand() {

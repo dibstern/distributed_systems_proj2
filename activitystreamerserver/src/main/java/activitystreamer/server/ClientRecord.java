@@ -251,6 +251,11 @@ public class ClientRecord {
         }
     }
 
+    public Integer getToken()
+    {
+        return this.next_token;
+    }
+
     private void deleteMessage(Integer token) {
         messages.removeIf(m -> m.getToken().equals(token));
     }
