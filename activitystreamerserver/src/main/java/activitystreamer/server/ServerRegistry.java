@@ -90,7 +90,7 @@ public class ServerRegistry {
         server_connections.put(con, this.parent);
 
         String msg = MessageProcessor.getGrandparentUpdateMsg(getParentJson());
-        SessionManager.getInstance().forwardServerMsg(con, msg);
+        SessionManager.getInstance().forwardToChildren(msg);
 
         return this.parent;
     }
@@ -100,7 +100,8 @@ public class ServerRegistry {
         all_servers.remove(this.parent.getId());
         this.parent = null;
         this.parentConnection = null;
-        // TODO: Is the server_connections being
+        String msg = MessageProcessor.getGrandparentUpdateMsg(getParentJson());
+        SessionManager.getInstance().forwardToChildren(msg);
     }
 
     // ------------------------------ CHILD MANAGEMENT ------------------------------
@@ -144,6 +145,10 @@ public class ServerRegistry {
         });
         Collections.sort(childList);
         return childList;
+    }
+
+    public ConcurrentHashMap<ConnectedServer, Connection> getConnectedChildConnections() {
+        return this.connectedChildServers;
     }
 
     // ------------------------------ SIBLING MANAGEMENT ------------------------------

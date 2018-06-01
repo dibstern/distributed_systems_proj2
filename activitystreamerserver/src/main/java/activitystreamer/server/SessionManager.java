@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.apache.logging.log4j.LogManager;
@@ -428,7 +429,7 @@ public class SessionManager extends Thread {
 
         // Update other child servers with their new sibling!
         msg = MessageProcessor.getSiblingUpdateMsg(newChild.toJson());
-        forwardServerMsg(con, msg);
+        forwardToChildren(msg);
     }
 
 
@@ -755,6 +756,14 @@ public class SessionManager extends Thread {
             if (con != c) {
                 con.writeMsg(msg);
             }
+        }
+    }
+
+    public void forwardToChildren(String msg) {
+        ConcurrentHashMap<ConnectedServer, Connection> children = serverRegistry.getConnectedChildConnections();
+
+        for (Connection con : children.values()) {
+            con.writeMsg(msg);
         }
     }
 
