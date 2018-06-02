@@ -191,6 +191,9 @@ public class ServerRegistry {
     public void addSibling(JSONObject siblingJson) {
         Type collectionType = new TypeToken<ConnectedServer>(){}.getType();
         ConnectedServer sibling = MessageProcessor.getGson().fromJson(siblingJson.toJSONString(), collectionType);
+        sibling.setIsSibling(true);
+        sibling.setIsParent(false);
+        sibling.setIsChild(false);
         if (!siblings_list.contains(sibling)) {
             this.siblings_list.add(sibling);
             Collections.sort(this.siblings_list);
@@ -376,6 +379,7 @@ public class ServerRegistry {
     }
 
     public boolean amRootSibling() {
+        Collections.sort(siblings_list);
         return (siblings_list.size() > 1 && siblings_list.get(0).equals(this_server));
     }
 
