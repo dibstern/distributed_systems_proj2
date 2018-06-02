@@ -119,6 +119,10 @@ public class ServerRegistry {
         String msg = MessageProcessor.getGrandparentUpdateMsg(getParentJson());
         SessionManager.getInstance().forwardToChildren(msg);
 
+        // Check if parent was previously our sibling, and remove from siblings list if true
+        if (siblings_list.contains(parent)) {
+            removeSibling(parent);
+        }
         return this.parent;
     }
 
@@ -307,6 +311,13 @@ public class ServerRegistry {
             // Check if the root sibling was the server that crashed - update if required
             setRootSibling();
         }
+    }
+
+    /** Remove a sibling from the siblings list, and reassign the root sibling, if necessary
+     * @param sibling The sibling to be removed from the list */
+    public void removeSibling(ConnectedServer sibling) {
+        siblings_list.remove(sibling);
+        setRootSibling();
     }
 
     /** A server in the network (that we are not directly connected to) has crashed - remove from our records
