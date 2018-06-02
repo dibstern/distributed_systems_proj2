@@ -83,7 +83,8 @@ public class Server {
             try {
                 int a = Integer.parseInt(cmd.getOptionValue("a"));
                 Settings.setActivityInterval(a);
-            } catch (NumberFormatException e) {
+            }
+            catch (NumberFormatException e) {
                 log.error("-a requires a number in milliseconds, parsed: " + cmd.getOptionValue("a"));
                 help(options);
             }
@@ -91,7 +92,8 @@ public class Server {
 
         try {
             Settings.setLocalHostname(InetAddress.getLocalHost().getHostAddress());
-        } catch (UnknownHostException e) {
+        }
+        catch (UnknownHostException e) {
             log.warn("failed to get localhost IP address");
         }
 
@@ -106,6 +108,7 @@ public class Server {
         log.info("starting server");
 
         final SessionManager c = SessionManager.getInstance();
+
         Runtime.getRuntime().addShutdownHook(new Thread() {
             public void run() {
                 c.setTerm(true);

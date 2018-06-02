@@ -245,11 +245,14 @@ public class Responder {
                     String hostname = json.get("hostname").toString();
                     Integer port = ((Long)json.get("port")).intValue();
                     String secret = (String) json.get("secret");
-                    SessionManager.getInstance().authenticateIncomingSever(secret, con, id, hostname, port);
+
+                    SessionManager sessionManager = SessionManager.getInstance();
+
+                    sessionManager.authenticateIncomingSever(secret, con, id, hostname, port);
 
                     // Accept the registry and use it to update ours (as part of the handshake)
                     JSONArray registry = (JSONArray) json.get("registry");
-                    SessionManager.getInstance().getClientRegistry().updateRecords(registry);
+                    sessionManager.getClientRegistry().updateRecords(registry);
                 }
             });
             responses.put("AUTHENTICATION_SUCCESS", new ServerCommand() {
