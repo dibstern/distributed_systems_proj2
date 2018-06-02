@@ -49,22 +49,31 @@ public class ConnectedClient {
      * Getters and Setters
      */
 
+    /** Returns the username of a given connected client */
     public String getUsername() {
         return this.username;
     }
 
+    /** Returns the secret of a given connected client */
     public String getSecret() {
         return this.secret;
     }
 
+    /** Checks if username and secret matches client records
+     * @param username Username of the client
+     * @param secret The secret of the client
+     * @return Returns true if username and secret match record, false otherwise */
     public boolean isClient(String username, String secret) {
         return this.username.equals(username) && this.secret.equals(secret);
     }
 
+    /** Sets a client to registered */
     public void register() {
         this.registered = true;
     }
 
+    /** Checks if the client is registered with the network
+     * @return true if client is registered, false otherwise */
     public boolean isRegistered() {
         return this.registered;
     }

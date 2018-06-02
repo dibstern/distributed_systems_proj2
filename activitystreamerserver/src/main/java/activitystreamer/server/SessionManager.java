@@ -126,13 +126,6 @@ public class SessionManager extends Thread {
         }
     }
 
-    // TODO: This, and/or fix bad sibling server info (Bad str, wrong port) in sibling_servers in AUTHENTICATION_SUCCESS   (Exception in thread "Thread-5" java.lang.IllegalArgumentException: protocol = socket host = null) (Trying to connect to: /192.168.1.154:57724)
-    // TODO: Also, receiving "{"command":"INVALID_MESSAGE","info":"Message received from an unauthenticated server"}" after
-    // TODO:    sending SERVER_ANNOUNCE and NEW_GRANDPARENT messages (should those have been sent?). Note: SERVER_SHUTDOWN
-    // TODO:    also sent (in response to INVALID_MESSAGE, right?
-//    public String cleanHostname(String hostname) {
-//
-//    }
 
     /**
      * Processing incoming messages from a given connection.
@@ -266,6 +259,7 @@ public class SessionManager extends Thread {
                 }
             }
         }
+        // Check if we are the new root server of the network
         if (!reconnected && rootSibling) {
             log.info("This server is the new parent server, allowing other servers to connect to this one.");
         }
@@ -287,11 +281,13 @@ public class SessionManager extends Thread {
         this.reconnecting = false;
     }
 
+    /** Checks if server is in the process of reconnecting with the rest of the network/fixing the network
+     * partition. */
     public boolean isReconnecting() {
         return this.reconnecting;
     }
 
-
+    /** Closes all client and server connections a server has. */
     public void closeAllConnections() {
         for (Connection c : connections) {
             sessionManager.closeConnection(c, "Context: Closing all connections");
@@ -380,7 +376,8 @@ public class SessionManager extends Thread {
     /** Authenticates a new server from incoming connection
      * @param incomingSecret The secret supplied by the authenticating server
      * @param c The connection a server is trying to authenticate on **/
-    public boolean authenticateIncomingSever(String incomingSecret, Connection c, String id, String hostname, Integer port) {
+    public boolean authenticateIncomingSever(String incomingSecret, Connection c, String id, String hostname,
+                                             Integer port) {
 
         // Check if secret matches the secret of this server
         if (!Settings.getSecret().equals(incomingSecret)) {
@@ -397,8 +394,10 @@ public class SessionManager extends Thread {
                 newChild = serverRegistry.addConnectedChild(c, id, hostname, port);
             }
             else {
+                // This server is the new root child of the system
                 newChild = serverRegistry.addRootChild(c, id, hostname, port);
             }
+            // Send AUTHENTICATE_SUCCESS message
             serverAuthenticateSuccess(c, newChild);
             return true;
         }
@@ -420,12 +419,19 @@ public class SessionManager extends Thread {
     public void serverAuthenticateFailed(Connection con, String secret) {
         String msg = MessageProcessor.getAuthenticationFailedMsg(secret);
         con.writeMsg(msg);
-        String closeContext = "Close Connection Context: Authenticate Failed (in serverAuthenticateFailed, in SessionManager)";
+        String closeContext = "Close Connection Context: Authenticate Failed (in serverAuthenticateFailed, " +
+                "in SessionManager)";
         closeConnection(con, closeContext);
         deleteClosedConnection(con);
     }
 
+    /**
+     * Incoming server has successfully authenticated - send an authentication success message
+     * @param con the server connection to send the message to
+     * @param newChild the record of the new server connection
+     */
     public void serverAuthenticateSuccess(Connection con, ConnectedServer newChild) {
+        // Generate AUTHENTICATION_SUCCESS message
         String msg = MessageProcessor.getAuthenticationSuccessMsg(clientRegistry.getRecordsJson(),
                                                                   serverRegistry.toJson(),
                                                                   Settings.getLocalHostname(),
@@ -465,8 +471,6 @@ public class SessionManager extends Thread {
      */
     public boolean clientLoggedInLocally(String user, String secret) {
         Connection con = getConnectionForClient(user, secret);
-        // TODO: Could return a null connection, prepare for that before using this method
-
         return checkClientLoggedIn(con);
     }
 
@@ -478,7 +482,8 @@ public class SessionManager extends Thread {
     public void clientLoginFailed(Connection con, String failureMessage) {
         String msg = MessageProcessor.getClientLoginFailedMsg(failureMessage);
         con.writeMsg(msg);
-        String closeContext = "Close Connection Context: Client failed to login (in clientLoginFailed, in SessionManager)";
+        String closeContext = "Close Connection Context: Client failed to login (in clientLoginFailed, " +
+                "in SessionManager)";
         closeConnection(con, closeContext);
         deleteClosedConnection(con);
     }
@@ -538,17 +543,17 @@ public class SessionManager extends Thread {
     }
 
     /** Log in an anonymous client
-     *
-     * ...
-     *
      * @param c The connection a client is using
-     * @param username The username supplied by the client **/
+     * @param username The username supplied by the client
+     * @param secret The secret assigned to the client **/
     public Integer loginAnonymousClient(Connection c, String username, String secret) {
 
+        // Add client to the clientConnections list and remove from generic holding list
         System.out.println("LOGGING IN ANONYMOUS CLIENT LOCALLY ->       username: " + username);
         clientConnections.put(c, new ConnectedClient(username, secret));
         connections.remove(c);
 
+        // Add the client record to our local store and login the client
         clientRegistry.addFreshClient(username, secret);
         String loginContext = "Context: Received LOGIN from Anon user, now in loginAnonymousClient (in SessionMangr).";
         Integer token = clientRegistry.logUser(true, username, secret, loginContext, Integer.MIN_VALUE);
@@ -567,7 +572,8 @@ public class SessionManager extends Thread {
     /** Checks if the server knows of another server that has at least two less connections than it. If such a server
      * exists, sends a REDIRECT message with that server's hostname and port number.
      * This has been implemented to return the FIRST server that has two or less connections.
-     * @param c The connection to send the message on */
+     * @param c The connection to send the message on
+     * @param anonClient True if the client is an anonymous client, false if registered */
     public boolean checkRedirectClient(Connection c, boolean anonClient) {
         String msg;
         String logoutContext;
@@ -576,13 +582,16 @@ public class SessionManager extends Thread {
         boolean redirect = false;
         boolean logoutSuccess = false;
         boolean disconnect = false;
+        // Check if we know of a server that has a load sufficiently lower than ours
         for (ConnectedServer server : serverRegistry.getAllServers()) {
             Integer serverLoad = server.getLoad();
             if (server.isConnected() && serverLoad != null && serverLoad <= load - 2) {
                 redirect = true;
+                // Client should be redirected to a different server
                 msg = MessageProcessor.getRedirectMsg(server.getHostname(), server.getPort());
                 logoutContext = "Context: Redirecting, now in checkRedirect (in SessionManager)";
 
+                // If client is anonymous, we need to remove the record from our registry so we do not create conflicts
                 if (!anonClient) {
                     boolean doDisconnect = false;
                     logoutSuccess = logoutClient(c, logoutContext, doDisconnect, true, null);
@@ -590,6 +599,7 @@ public class SessionManager extends Thread {
                         disconnect = true;
                     }
                 }
+                // Client is a registered user - merely set as logout and redirect
                 else {
                     disconnect = true;
                 }
@@ -611,11 +621,14 @@ public class SessionManager extends Thread {
         return false;
     }
 
+    /** Delays the disconnection to account for synchronisation and communication delays*/
     public void delayDisconnect() {
         delayThread(REDIRECT_DELAY);
     }
 
 
+    /** Delays the thread for a period of time to avoid issues causes by communication delays
+     * @param delay The period of time to put a thread to sleep */
     public void delayThread(Integer delay) {
         try {
             Thread.sleep(delay);

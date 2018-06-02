@@ -58,9 +58,13 @@ public class Connection extends Thread {
         return false;
     }
 
+    /** Prints a message to assist in debugging
+     * @param msg The message to be printed
+     * @param sending If the message is in the process of being sent */
     private synchronized void printDebugMessages(String msg, boolean sending) {
 
         if (PRINT_SERVER_STATUS) {
+            // Print out the status of the server
             JSONObject msgJson = MessageProcessor.toJson(msg, false, "");
             if (msgJson.containsKey("command") && msgJson.get("command").toString().equals("SERVER_ANNOUNCE")) {
                 String serverHostname = msgJson.get("hostname").toString();
@@ -83,6 +87,7 @@ public class Connection extends Thread {
 
     /**
      * Closes a connection and handles appropriate shutdown
+     * @param thisServerId The is of this server
      */
     public void closeCon() {
         if (open) {
@@ -104,8 +109,6 @@ public class Connection extends Thread {
     /**
      * Using threaded connections so server can have multiple clients - runs the connection thread whilst the server
      * still exists, and there are messages being sent to the connection.
-     *
-     * TODO: Insert while(retry) loop and a 2 sec delay after a broken network connection
      */
     public void run() {
         String closeContext;
@@ -141,11 +144,16 @@ public class Connection extends Thread {
         }
     }
 
+    /** Checks if a connection is open
+     * @return returns true if connection open, false otherwise */
     public boolean isOpen() {
         return this.open;
     }
 
     @Override
+    /** Compares two connections to check if the same
+     * @param obj The connection we are comparing to
+     * @return true if connections are the same/match, false otherwise */
     public boolean equals(Object obj) {
         if (obj == null) {
             return false;
@@ -167,11 +175,14 @@ public class Connection extends Thread {
         return hash;
     }
 
+    /** Gets the port number of the given connection
+     * @return the connection's port number */
     public Integer getPort() {
         return this.socket.getLocalPort();
-        // return this.socket.getPort()
     }
 
+    /** Gets the hostname of the given connection
+     * @return the connection's hostname*/
     public String getHostname() {
         String localAddress = this.socket.getLocalAddress().toString();
         return localAddress.replaceAll("[\\,/]", "");

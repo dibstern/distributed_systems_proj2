@@ -65,7 +65,8 @@ public class Responder {
 
                             // If login succeeded, broadcast LOGIN_BROADCAST message
                             if (!token.equals(Integer.MIN_VALUE)) {
-                                sessionManager.serverBroadcast(MessageProcessor.getLoginBroadcast(username, secret, token));
+                                sessionManager.serverBroadcast(MessageProcessor.getLoginBroadcast(username, secret,
+                                        token));
                             }
                         }
                     }
@@ -77,7 +78,6 @@ public class Responder {
                             sessionManager.serverBroadcast(MessageProcessor.getLoginBroadcast(user, secret, token));
                         }
                         // Check if client should be redirected to another server
-                        // TODO: Check if this can be removed
                         sessionManager.delayThread(500);
                         boolean redirected = sessionManager.checkRedirectClient(con, false);
 
@@ -108,7 +108,8 @@ public class Responder {
                     String closeConnectionContext = "Close Connection Context: Received LOGOUT (in Responder)";
                     ConnectedClient client = sessionManager.getConnectedClient(con);
                     String username = client.getUsername();
-                    String logoutContext = closeConnectionContext + ". Context: received LOGOUT request from " + username;
+                    String logoutContext = closeConnectionContext + ". Context: received LOGOUT request from "
+                            + username;
 
                     sessionManager.logoutClient(con, logoutContext, true, true, null);
                 }
@@ -151,7 +152,8 @@ public class Responder {
                     // Add message and its expected recipients to ClientRegistry and retrieve the allocated token
                     Integer msgToken = clientRegistry.addMsgToRegistry(user, clientMessage, loggedInUsers);
 
-                    System.out.println("My Registry, as of registering the received message (" + json.toString() + "): " + clientRegistry);
+                    System.out.println("My Registry, as of registering the received message " +
+                            "(" + json.toString() + "): " + clientRegistry);
 
                     // Add message token & recipients to ACTIVITY_BROADCAST message
                     String activityBroadcastMsg = MessageProcessor.getActivityBroadcastMsg(clientMessage, loggedInUsers,
@@ -200,15 +202,20 @@ public class Responder {
                     SessionManager sessionManager = SessionManager.getInstance();
                     ClientRegistry clientRegistry = sessionManager.getClientRegistry();
                     String logoutContext = closeConnectionContext + ". Logging out user that sent it.";
-
-                    boolean wasClient = sessionManager.logoutClient(con, logoutContext, true, true, null);
+                    // Check if the message came from a client
+                    boolean wasClient =
+                            sessionManager.logoutClient(con, logoutContext, true, true, null);
                     if (!wasClient) {
+                        // Close the server connections
                         String closeConContext = "Context: Received INVALID_MESSAGE";
                         sessionManager.closeConnection(con, closeConContext);
                         sessionManager.deleteClosedConnection(con);
                     }
                 }
             });
+            /* A server on the network has shutdown/crashed. Update our records so this server is no longer held in
+             * local storage, and repair network partition if this server was our parent server.
+             * If the server was one of our children, update all other children.  **/
             responses.put("SERVER_SHUTDOWN", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
@@ -217,14 +224,17 @@ public class Responder {
                     System.out.println("serverRegistry BEFORE SERVER_SHUTDOWN CHANGES" + serverRegistry.toString());
                     String shutdownServerId = json.get("id").toString();
                     ConnectedServer shutdownServer = serverRegistry.getServerInfo(shutdownServerId);
+                    // Check if we already knew about the server
                     if (shutdownServer != null) {
                         System.out.println("Received SERVER_SHUTDOWN from " + shutdownServer.toString());
                     }
                     else {
                         System.out.println("Received SERVER_SHUTDOWN from server not in all_servers in ServerRegistry!");
                     }
-                    System.out.println("About to use serverRegistry to reconnect: " + sessionManager.getServerRegistry().toString());
+                    System.out.println("About to use serverRegistry to reconnect: "
+                            + sessionManager.getServerRegistry().toString());
                     String closeConnectionContext = "Close Connection Context: Received SERVER_SHUTDOWN (in Responder)";
+                    // If the server was our parent, remove from our local storage
                     if (serverRegistry.isParentConnection(con)) {
                         serverRegistry.removeCrashedParent();
                         sessionManager.reconnectParentIfDisconnected();
@@ -266,6 +276,9 @@ public class Responder {
                     sessionManager.getClientRegistry().updateRecords(registry);
                 }
             });
+            /* Server successfully authenticated itself with another server in the network. Update representation of
+             * the network to include any new information received from parent server. This includes setting the
+             * parent server as our parent, updating our grandparent and updating our list of sibling servers. **/
             responses.put("AUTHENTICATION_SUCCESS", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
@@ -299,21 +312,24 @@ public class Responder {
                     }
                 }
             });
-            /* ... */
+            /* Our grandparent server has changed - update our records to the new grandparent */
             responses.put("GRANDPARENT_UPDATE", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
                     ServerRegistry serverRegistry = SessionManager.getInstance().getServerRegistry();
                     JSONObject grandparentRecord = (JSONObject) json.get("new_grandparent");
                     if (grandparentRecord != null) {
+                        // Set new grandparent
                         serverRegistry.setGrandparent(grandparentRecord);
                     }
                     else {
+                        // We do not have a grandparent to connect to if parent crashes, set as NULL
                         serverRegistry.setNoGrandparent();
                     }
                 }
             });
-            /* ... */
+            /* A new server has connected to our parent server, and therefore is one of our siblings. Add this server
+             * to our records.  */
             responses.put("SIBLING_UPDATE", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
@@ -322,7 +338,8 @@ public class Responder {
                     serverRegistry.addSibling(siblingRecord);
                 }
             });
-            /* ... */
+            /* One of our siblings (a server connected to our parent) has crashed - remove this server from our
+            records */
             responses.put("SIBLING_CRASHED", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
@@ -338,6 +355,8 @@ public class Responder {
                     System.out.println("serverRegistry AFTER SIBLING_CRASHED CHANGES" + serverRegistry.toString());
                 }
             });
+            /* Another server in the network has a direct connection to a given anonymous client. Add this client record
+             * to our local storage.  */
             responses.put("ANON_CONFIRM", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
@@ -353,6 +372,8 @@ public class Responder {
                     SessionManager.getInstance().forwardServerMsg(con, json.toString());
                 }
             });
+            /* Conflicting understand of whether an anonymous client exists on the network or not - send out broadcast
+            * on network to check if any other server has a direct connection to the given anonymous client. */
             responses.put("ANON_CHECK", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
@@ -396,7 +417,8 @@ public class Responder {
                     sessionManager.scheduleDelivery(sender);
                 }
             });
-            /* ... */
+            /* Client(s) successfully received message(s), update records by removing as a recipient from
+            the message */
             responses.put("MSG_ACKS", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
@@ -413,7 +435,7 @@ public class Responder {
                     sessionManager.forwardServerMsg(con, json.toString());
                 }
             });
-            /* ... */
+            /* A registered client has logged into the network - update records to reflect this */
             responses.put("LOGIN_BROADCAST", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
@@ -426,11 +448,12 @@ public class Responder {
                     Integer loginRequestToken = ((Long) json.get("token")).intValue();
                     String loginContext = "Context: receiving LOGIN_BROADCAST (in Responder)";
 
+                    // Update client records so is logged in
                     ClientRegistry clientRegistry = SessionManager.getInstance().getClientRegistry();
                     clientRegistry.logUser(true, user, secret, loginContext, loginRequestToken);
                 }
             });
-            /* ... */
+            /* A client has logged off the network - update record to reflect this  */
             responses.put("LOGOUT_BROADCAST", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
@@ -439,17 +462,20 @@ public class Responder {
                     Integer logoutRequestToken = ((Long) json.get("token")).intValue();
                     String user = json.get("username").toString();
                     String secret = json.get("secret").toString();
+                    // Set client record to indicate client is not logged into the network
                     sessionManager.logoutRegisteredClient(user, secret, logoutContext, logoutRequestToken);
                     sessionManager.forwardServerMsg(con, json.toString());
                 }
             });
-            /* ... */
+            /* An anonymous client has logged off the network - remove this client from our local storage and forward
+             * the message through the network  */
             responses.put("ANON_LOGOUT_BROADCAST", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
                     String user = json.get("username").toString();
                     SessionManager sessionManager = SessionManager.getInstance();
                     // String logoutContext = "Context: Received ANON_LOGOUT_BROADCAST for " + user;
+                    // Because was an anonymous user, need to remove the client's record
                     sessionManager.logoutAnonClient(user);
                     sessionManager.forwardServerMsg(con, json.toString());
                 }
@@ -472,7 +498,6 @@ public class Responder {
                     sessionManager.getClientRegistry().updateRecords(newClientRegistry);
 
                     // Update this server's information about the given server
-                    // TODO: If the connection is our parent, then the SERVER_ANNOUNCE is not from a child
                     ServerRegistry serverRegistry = sessionManager.getServerRegistry();
                     if (serverRegistry.isParentConnection(con)) {
                         serverRegistry.updateRegistry(id, load, hostname, port, false);
@@ -480,8 +505,6 @@ public class Responder {
                     else {
                         serverRegistry.updateRegistry(id, load, hostname, port, true);
                     }
-
-
                     // Forward to all other servers that this server is connected to
                     sessionManager.forwardServerMsg(con, json.toString());
 
@@ -497,7 +520,7 @@ public class Responder {
 
                     SessionManager sessionManager = SessionManager.getInstance();
 
-                    // Firstly, if username exists then broadcast a LOCK_DENIED message // TODO: Aaron said this on LMS
+                    // Firstly, if username exists then broadcast a LOCK_DENIED message
                     if (sessionManager.getClientRegistry().userExists(username)) {
                         String msg = MessageProcessor.getLockResponseMg("LOCK_DENIED", username, secret);
                         sessionManager.serverBroadcast(msg);

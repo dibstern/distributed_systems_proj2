@@ -22,8 +22,8 @@ public class MessageProcessor {
     /**
      * Validates incoming messages (ensures they have the correct fields)
      * @param json The JSONObject to be validated as containing the correct fields.
-     * @return Msg if the JSONObject does not contain a known command and the required fields for that command, otherwise
-     * null.
+     * @return Msg if the JSONObject does not contain a known command and the required fields for that command,
+     * otherwise null.
      */
     public static String hasValidCommandAndFields(JSONObject json) {
 
@@ -58,19 +58,15 @@ public class MessageProcessor {
         String missingFieldMsg = "the received " + command + " was missing fields";
 
         switch (command) {
-            // TODO: Check that this is correct
             case "ANON_CONFIRM":
             case "ANON_CHECK":
                 return (json.containsKey("anon_record") ? null : missingFieldMsg);
             case "MSG_ACKS":
                 return (json.containsKey("sender") && json.containsKey("messages") ? null : missingFieldMsg);
-
             case "GRANDPARENT_UPDATE":
                 return (json.containsKey("new_grandparent") ? null : missingFieldMsg);
             case "SIBLING_UPDATE":
                 return (json.containsKey("new_sibling") ? null : missingFieldMsg);
-
-            // TODO: CONFIRM FIELDS OF AUTHENTICATION_SUCCESS
             case "AUTHENTICATION_SUCCESS":
                 return (isValidServerAuthMsg && json.containsKey("id") && json.containsKey("hostname") &&
                         json.containsKey("port") ? null : missingFieldMsg);
@@ -98,7 +94,7 @@ public class MessageProcessor {
             case "INVALID_MESSAGE":
                 return (json.containsKey("info") ? null : missingFieldMsg);
             case "SIBLING_CRASHED":
-            case "SERVER_SHUTDOWN":                                                                                     // TODO: CONFIRM FIELDS OF SERVER_SHUTDOWN
+            case "SERVER_SHUTDOWN":
             case "LOGOUT":
                 return null;
             // Unrecognised command -> Return false, triggering an INVALID_MESSAGE
@@ -175,7 +171,7 @@ public class MessageProcessor {
      * Returns an error message if the sender is not authenticated / logged in / registered, otherwise null
      * @param json The JSON object received by the server
      * @param con The connection the JSON object was sent on
-     * @return ...
+     * @return An error message, if sender not valid
      */
     public static String validSender(JSONObject json, Connection con) {
 
@@ -262,6 +258,7 @@ public class MessageProcessor {
         }
     }
 
+    /** Creates and returns a Gson, if not initialised already */
     public static Gson getGson() {
         if (gson == null) {
             gson = new Gson();
@@ -269,6 +266,7 @@ public class MessageProcessor {
         return gson;
     }
 
+    /** Creates and returns a JSONParser */
     public static JSONParser getJsonParser() {
         if (jsonParser == null) {
             jsonParser = new JSONParser();
@@ -402,8 +400,12 @@ public class MessageProcessor {
     /** Creates an AUTHENTICATE message to be sent by a server to its parent server.
      * @param secret The secret a server is trying to authenticate with
      * @param clientRecordsJson The ClientRegistry as a JSONArray in a JSON object -> {"registry" : JSONArray[...]}
+     * @param id The sending server's id
+     * @param hostname The sending server's hostname
+     * @param port The sending server's port number
      * @return msg the message to be sent to the parent server */
-    public static String getAuthenticateMsg(String secret, JSONObject clientRecordsJson, String id, String hostname, Integer port) {
+    public static String getAuthenticateMsg(String secret, JSONObject clientRecordsJson, String id, String hostname,
+                                            Integer port) {
         JSONObject msg = new JSONObject();
         msg.put("command", "AUTHENTICATE");
         msg.put("secret", secret);
@@ -425,6 +427,9 @@ public class MessageProcessor {
         return msg.toString();
     }
 
+    /** Creates a GRANDPARENT_UPDATE message to be sent to a server's children
+     * @param grandparentRecordJson The JSONObject representation of the grandparent server
+     * @return Msg the message to be sent to the server's children */
     public static String getGrandparentUpdateMsg(JSONObject grandparentRecordJson) {
         JSONObject msg = new JSONObject();
         msg.put("command", "GRANDPARENT_UPDATE");
@@ -432,6 +437,9 @@ public class MessageProcessor {
         return msg.toString();
     }
 
+    /** Creates a SIBLING_UPDATE message to be sent to a server's children
+     * @param siblingRecordJson The JSONObject representation of the new sibling server
+     * @return Msg the message to be sent to the server's children */
     public static String getSiblingUpdateMsg(JSONObject siblingRecordJson) {
         JSONObject msg = new JSONObject();
         msg.put("command", "SIBLING_UPDATE");
@@ -439,6 +447,9 @@ public class MessageProcessor {
         return msg.toString();
     }
 
+    /** Creates a SIBLING_CRASHED message to be sent to a server's children
+     * @param siblingCrashed The JSONObject representation of the crashed sibling server
+     * @return Msg the message to be sent to the server's children */
     public static String getSiblingCrashed(JSONObject siblingCrashed) {
         JSONObject msg = new JSONObject();
         msg.put("command", "SIBLING_CRASHED");
@@ -446,6 +457,16 @@ public class MessageProcessor {
         return msg.toString();
     }
 
+    /** Creates an AUTHENTICATE_SUCCESS message to be sent by a server to its child server, after successfull
+     * authentication.
+     * @param clientRecordsJson The ClientRegistry as a JSONArray in a JSON object -> {"registry" : JSONArray[...]}
+     * @param serverRegistryJson A copy of the sending server's ServerRegistry
+     * @param id The sending server's id
+     * @param hostname The sending server's hostname
+     * @param port The sending server's port number
+     * @param grandparent A JSONObject representing the child server's grandparent server
+     * @param siblingList A list of the child server's siblings
+     * @return msg the message to be sent to the child server */
     public static String getAuthenticationSuccessMsg(JSONObject clientRecordsJson, JSONObject serverRegistryJson,
                                                      String hostname, int port, String id, JSONObject grandparent,
                                                      JSONObject siblingList) {
@@ -455,6 +476,7 @@ public class MessageProcessor {
         msg.put("port", port);
         msg.put("id", id);
 
+        // Add the ServerRegistry, grandparent and sibling list, if they exists
         if (serverRegistryJson != null)
         {
             msg.putAll(serverRegistryJson);
@@ -491,6 +513,11 @@ public class MessageProcessor {
         return msg.toString();
     }
 
+    /** Creates a LOGIN_BROADCAST message to be sent to all servers in the network.
+     * @param user The username of the client that has logged in
+     * @param secret The secret of the client that has logged in
+     * @param token The token of the client that has logged in
+     * @return Msg the message to be sent to all servers on the network */
     public static String getLoginBroadcast(String user, String secret, Integer token) {
         JSONObject msg = new JSONObject();
         msg.put("command", "LOGIN_BROADCAST");
@@ -500,6 +527,11 @@ public class MessageProcessor {
         return msg.toString();
     }
 
+    /** Creates a LOGOUT_BROADCAST message to be sent to all servers in the network.
+     * @param user The username of the client that has logged out
+     * @param secret The secret of the client that has logged out
+     * @param token The token of the client that has logged out
+     * @return Msg the message to be sent to all servers on the network */
     public static String getLogoutBroadcast(String user, String secret, Integer token) {
         JSONObject msg = new JSONObject();
         msg.put("command", "LOGOUT_BROADCAST");
@@ -509,6 +541,10 @@ public class MessageProcessor {
         return msg.toString();
     }
 
+    /** Creates a ANON_LOGOUT_BROADCAST message to be sent to all servers in the network.
+     * @param user The username of the client that has logged out
+     * @param secret The secret of the client that has logged out
+     * @return Msg the message to be sent to all servers on the network */
     public static String getAnonLogoutBroadcast(String user, String secret) {
         JSONObject msg = new JSONObject();
         msg.put("command", "ANON_LOGOUT_BROADCAST");
@@ -517,6 +553,9 @@ public class MessageProcessor {
         return msg.toString();
     }
 
+    /** Creates an ANON_CONFIRM message to be sent to all servers in the network.
+     * @param anonClientRecord The ClientRecord we can confirm exists
+     * @return Msg the message to be sent to all servers on the network */
     public static String getAnonConfirm(JSONObject anonClientRecord) {
         JSONObject msg = new JSONObject();
         msg.put("command", "ANON_CONFIRM");
@@ -524,6 +563,9 @@ public class MessageProcessor {
         return msg.toString();
     }
 
+    /** Creates an ANON_CHECK message to be sent to all servers in the network.
+     * @param anonClientRecord The client record we want each server to check for
+     * @return Msg the message to be sent to all servers on the network */
     public static String getAnonCheck(JSONObject anonClientRecord) {
         JSONObject msg = new JSONObject();
         msg.put("command", "ANON_CHECK");
@@ -533,7 +575,9 @@ public class MessageProcessor {
 
     /** Creates an ACTIVITY_BROADCAST message to be sent across the network.
      * @param json The activity message
-     * @return Msg the message to be sent across the network*/
+     * @param loggedInUsers All of the users currently logged into the network
+     * @param msgToken The message token
+     * @return Msg the message to be sent across the network */
     public static String getActivityBroadcastMsg(JSONObject json, ArrayList<String> loggedInUsers, Integer msgToken) {
 
         // Add all the Activity_Message fields and values (command, username, secret, activity)
@@ -551,6 +595,11 @@ public class MessageProcessor {
         return msg.toString();
     }
 
+    /** Creates an ACTIVITY_MESSAGE message to be sent across the network.
+     * @param activityMsg The activity message
+     * @param user The client who sent the original message
+     * @param secret The secret of the client who sent the message
+     * @return Msg the message to be sent across the network */
     public static JSONObject processActivityMessage(JSONObject activityMsg, String user, String secret) {
         String command = activityMsg.get("command").toString();
         JSONObject activityMessage = (JSONObject) activityMsg.get("activity");
@@ -571,6 +620,9 @@ public class MessageProcessor {
         return processedMsg;
     }
 
+    /** Takes an object representing all message acknowledgements, and converts it to a hashmap
+     * @param msgAcksObj The object containing all acknowledgement messages
+     * @return A hashmap of message tokens and associated clients who recieved a message */
     public static HashMap<Integer, ArrayList<String>> acksToHashMap(Object msgAcksObj) {
         HashMap<Integer, ArrayList<String>> ackMap = new HashMap<Integer, ArrayList<String>>();
         JSONObject msgAcksJson = (JSONObject) msgAcksObj;
@@ -589,6 +641,9 @@ public class MessageProcessor {
         return null;
     }
 
+    /** Creates a MSG_ACKS message to be sent across the network.
+     * @param sender The client who send the message that has been delivered
+     * @return Msg the message to be sent across the network */
     public static JSONObject getStartAckMsg(String sender) {
         JSONObject ackMessage = new JSONObject();
         ackMessage.put("command", "MSG_ACKS");
@@ -596,6 +651,9 @@ public class MessageProcessor {
         return ackMessage;
     }
 
+    /** Converts a server message to a message that can be sent to, and processed by, the clients.
+     * @param serverJsonMessage The JSONObject representation of a server nessage
+     * @return JSONObject representation of the message to be sent to clients */
     public static JSONObject serverToClientJson(JSONObject serverJsonMessage) {
         JSONObject clientJsonMsg = new JSONObject();
         clientJsonMsg.put("command", serverJsonMessage.get("command"));
@@ -604,6 +662,9 @@ public class MessageProcessor {
         return clientJsonMsg;
     }
 
+    /** Cleans a message so it only contains the fields expected by a receiving client.
+     * @param json The JSONObject message to be sanitised
+     * @return JSONObject the cleaned up message to be sent to clients */
     public static JSONObject cleanClientMessage(JSONObject json) {
         JSONObject cleanedMessage = new JSONObject();
         cleanedMessage.put("command", "ACTIVITY_BROADCAST");
@@ -611,6 +672,9 @@ public class MessageProcessor {
         return cleanedMessage;
     }
 
+    /** Cleans an activity message so it only contains the fields expected by a receiving client.
+     * @param json The JSONObject message to be sanitised
+     * @return JSONObject the cleaned up activity message to be sent to clients */
     public static JSONObject cleanActivityMessage(JSONObject json) {
         JSONObject cleanedActMsg = new JSONObject();
         cleanedActMsg.put("command", "ACTIVITY_MESSAGE");
@@ -618,6 +682,9 @@ public class MessageProcessor {
         return cleanedActMsg;
     }
 
+    /** Creates a SHUT_DOWN message to be sent across the network.
+     * @param thisServerId The id of the server shutting down
+     * @return Msg the message to be sent across the network */
     public static String getShutdownMessage(String thisServerId) {
         JSONObject shutdownMessage = new JSONObject();
 
@@ -626,6 +693,9 @@ public class MessageProcessor {
         return shutdownMessage.toString();
     }
 
+    /** Checks if a client is an anonymous client
+     * @param username The username of the client we are examining
+     * @return true if client is anonymous, false otherwise */
     public static boolean isAnonymous(String username) {
         return (username.length() >= 9 && username.substring(0, 9).equals("anonymous"));
 
