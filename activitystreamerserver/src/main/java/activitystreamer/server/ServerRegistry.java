@@ -191,14 +191,16 @@ public class ServerRegistry {
     public void addSibling(JSONObject siblingJson) {
         Type collectionType = new TypeToken<ConnectedServer>(){}.getType();
         ConnectedServer sibling = MessageProcessor.getGson().fromJson(siblingJson.toJSONString(), collectionType);
-        this.siblings_list.add(sibling);
-        Collections.sort(this.siblings_list);
-        if (!all_servers.containsKey(sibling.getId())) {
+        if (!siblings_list.contains(sibling)) {
+            this.siblings_list.add(sibling);
+            Collections.sort(this.siblings_list);
+            if (!all_servers.containsKey(sibling.getId())) {
 
-            System.out.println("Adding Siblings -> Adding connection to server_connections: " + sibling.getPort());
-            all_servers.put(sibling.getId(), sibling);
+                System.out.println("Adding Siblings -> Adding connection to server_connections: " + sibling.getPort());
+                all_servers.put(sibling.getId(), sibling);
+            }
+            setRootSibling();
         }
-        setRootSibling();
     }
 
     public void setRootSibling() {
