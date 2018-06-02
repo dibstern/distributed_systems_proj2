@@ -129,7 +129,10 @@ public class ServerRegistry {
     public ConnectedServer addConnectedChild(Connection con, String id, String hostname, Integer port) {
         ConnectedServer childServer = new ConnectedServer(id, hostname, port, true, false);
         System.out.println("Adding Connected Child -> Adding connection to server_connections: " + port);
+        server_connections.put(con, childServer);
+        System.out.println("added to all_servers");
         all_servers.put(childServer.getId(), childServer);
+        System.out.println("added to connectedChildServers");
         connectedChildServers.put(childServer, con);
         return childServer;
     }

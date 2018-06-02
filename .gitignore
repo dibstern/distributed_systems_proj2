@@ -10,3 +10,5 @@ activitystreamerclient/target/maven-status/maven-compiler-plugin/compile/default
 activitystreamerclient/target/
 
 *.iml
+
+activitystreamerserver/target/
