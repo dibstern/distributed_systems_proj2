@@ -214,7 +214,6 @@ public class SessionManager extends Thread {
     public void run() {
         log.info("using activity interval of " + Settings.getActivityInterval() + " milliseconds");
         Integer secondsPassed;
-        Integer timeoutInterval;
         while (!term) {
             try {
                 secondsPassed = 0;
@@ -280,9 +279,9 @@ public class SessionManager extends Thread {
                 log.info("Succeeded in repairing network partition due to server failure.");
 
                 // Send a "GRANDPARENT_UPDATE" message to children.
-                this.reconnecting = false;
             }
         }
+        this.reconnecting = false;
     }
 
     public boolean isReconnecting() {
