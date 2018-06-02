@@ -95,6 +95,7 @@ public class MessageProcessor {
             case "AUTHENTICATION_FAIL":
             case "INVALID_MESSAGE":
                 return (json.containsKey("info") ? null : missingFieldMsg);
+            case "SIBLING_CRASHED":
             case "SERVER_SHUTDOWN":                                                                                     // TODO: CONFIRM FIELDS OF SERVER_SHUTDOWN
             case "LOGOUT":
                 return null;
@@ -229,6 +230,7 @@ public class MessageProcessor {
             case "LOCK_REQUEST":
             case "LOCK_DENIED":
             case "LOCK_ALLOWED":
+            case "SIBLING_CRASHED":
             case "LOGIN_BROADCAST":
             case "LOGOUT_BROADCAST":
                 if (!serverAuthenticated) {
@@ -437,7 +439,7 @@ public class MessageProcessor {
     public static String getSiblingCrashed(JSONObject siblingCrashed) {
         JSONObject msg = new JSONObject();
         msg.put("command", "SIBLING_CRASHED");
-        msg.putAll(siblingCrashed);
+        msg.put("crashed_sibling", siblingCrashed);
         return msg.toString();
     }
 

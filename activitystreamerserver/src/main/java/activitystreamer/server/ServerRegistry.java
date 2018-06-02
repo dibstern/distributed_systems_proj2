@@ -34,12 +34,12 @@ public class ServerRegistry {
         this.this_server = new ConnectedServer(id, hostname, port, false, false);
         this.siblings_list = new ArrayList<ConnectedServer>();
         this.siblings_list.add(this_server);
+        this.rootSibling = this_server;
         this.parent = null;
         this.parentConnection = null;
         this.server_connections = new ConcurrentHashMap<Connection, ConnectedServer>();
         this.unauthorised_connections = new ArrayList<Connection>();
         this.all_servers = new ConcurrentHashMap<String, ConnectedServer>();
-        this.rootSibling = null;
     }
 
     public ConnectedServer createNewRecord(JSONObject record, boolean isChild, boolean isParent) {
@@ -184,6 +184,7 @@ public class ServerRegistry {
             }
         });
         Collections.sort(this.siblings_list);
+        setRootSibling();
 //        setRootSibling(siblings_list.get(0));
     }
 
@@ -197,38 +198,53 @@ public class ServerRegistry {
             System.out.println("Adding Siblings -> Adding connection to server_connections: " + sibling.getPort());
             all_servers.put(sibling.getId(), sibling);
         }
+        setRootSibling();
     }
 
     public void setRootSibling() {
-        this.rootSibling = siblings_list.get(0);
+        if (!siblings_list.isEmpty()) {
+            this.rootSibling = siblings_list.get(0);
+        }
+        else {
+            System.out.println("SIBLINGS LIST IS EMPTY - CANNOT ADD rootSibling!");
+        }
     }
 
     public void removeCrashedParent() {
-        all_servers.remove(this.parent);
-        server_connections.remove(this.parent);
+        all_servers.remove(this.parent.getId());
+        removeFromServerCon(this.parent);
         this.parent = null;
     }
 
     public void removeCrashedChild(ConnectedServer crashedChild) {
-        all_servers.remove(crashedChild);
-        server_connections.remove(crashedChild);
+        all_servers.remove(crashedChild.getId());
+        removeFromServerCon(crashedChild);
         connectedChildServers.remove(crashedChild);
-
-        if (child_root.equals(crashedChild))
-        {
+        if (child_root.equals(crashedChild)) {
             setNextRootChild();
         }
     }
 
     public void removeCrashedSibling(ConnectedServer crashedSibling) {
-        all_servers.remove(crashedSibling);
-        server_connections.remove(crashedSibling);
+        all_servers.remove(crashedSibling.getId());
+        removeFromServerCon(crashedSibling);
         siblings_list.remove(crashedSibling);
-
-        if (rootSibling.equals(crashedSibling))
-        {
+        if (rootSibling == null) {
+            System.out.println("ERROR - NO ROOT SIBLING SET, CANNOT REMOVE CRASHED SIBLING!");
+        }
+        else if (rootSibling.equals(crashedSibling)) {
             setRootSibling();
         }
+    }
+
+    public void removeFromServerCon(ConnectedServer removeThisServer) {
+        ConcurrentHashMap<Connection, ConnectedServer> new_server_connections = new ConcurrentHashMap<>();
+        server_connections.forEach((con, server) -> {
+            if (!server.equals(removeThisServer)) {
+                new_server_connections.put(con, server);
+            }
+        });
+        this.server_connections = new_server_connections;
     }
 
     public ConnectedServer getServerFromCon(Connection con) {
@@ -241,6 +257,7 @@ public class ServerRegistry {
         }
         return null;
     }
+
 
     // ------------------------------ GENERAL ------------------------------
 
@@ -360,12 +377,11 @@ public class ServerRegistry {
         return (siblings_list.size() > 1 && siblings_list.get(0).equals(this_server));
     }
 
-    public ConcurrentLinkedQueue<ConnectedServer> tryToAdd(ConcurrentLinkedQueue<ConnectedServer> servers, ConnectedServer server) {
+    public void tryToAdd(ConcurrentLinkedQueue<ConnectedServer> servers, ConnectedServer server) {
         if (server != null && (server.getPort() != Settings.getLocalPort()) ) {
             System.out.println("Adding " + server + " to connections to try");
             servers.add(server);
         }
-        return servers;
     }
 
     public Connection getParentConnection() {

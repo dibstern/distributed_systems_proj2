@@ -323,13 +323,16 @@ public class Responder {
             responses.put("SIBLING_CRASHED", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
+                    System.out.println(json.toString());
                     ServerRegistry serverRegistry = SessionManager.getInstance().getServerRegistry();
+                    System.out.println("serverRegistry BEFORE SIBLING_CRASHED CHANGES" + serverRegistry.toString());
                     JSONObject siblingRecord = (JSONObject) json.get("crashed_sibling");
                     String id = siblingRecord.get("id").toString();
                     String hostname = siblingRecord.get("hostname").toString();
-                    Integer port = (int) siblingRecord.get("port");
+                    Integer port =  ((Long) siblingRecord.get("port")).intValue();
                     ConnectedServer tmp = new ConnectedServer(id, hostname, port, false, false);
                     serverRegistry.removeCrashedSibling(tmp);
+                    System.out.println("serverRegistry AFTER SIBLING_CRASHED CHANGES" + serverRegistry.toString());
                 }
             });
             responses.put("ANON_CONFIRM", new ServerCommand() {
