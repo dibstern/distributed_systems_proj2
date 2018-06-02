@@ -295,10 +295,12 @@ public class SessionManager extends Thread {
         for (Connection c : connections) {
             sessionManager.closeConnection(c, "Context: Closing all connections");
         }
+        connections.clear();
         serverRegistry.closeServerCons();
         clientConnections.keySet().forEach((c) -> {
             sessionManager.closeConnection(c, "Context: Closing all connections");
         });
+        clientConnections.clear();
     }
 
     /** Received an invalid message from some connection. Generate an invalid message response
@@ -419,6 +421,7 @@ public class SessionManager extends Thread {
         con.writeMsg(msg);
         String closeContext = "Close Connection Context: Authenticate Failed (in serverAuthenticateFailed, in SessionManager)";
         closeConnection(con, closeContext);
+        deleteClosedConnection(con, closeContext);
     }
 
     public void serverAuthenticateSuccess(Connection con, ConnectedServer newChild) {
@@ -476,6 +479,7 @@ public class SessionManager extends Thread {
         con.writeMsg(msg);
         String closeContext = "Close Connection Context: Client failed to login (in clientLoginFailed, in SessionManager)";
         closeConnection(con, closeContext);
+        deleteClosedConnection(con, closeContext);
     }
 
     /** Log in a client that is not anonymous, by checking username and password combination match that
@@ -595,6 +599,7 @@ public class SessionManager extends Thread {
                     // LOGOUT_BROADCAST should have been sent. Will now disconnect user and log them out.
                     c.writeMsg(msg);
                     closeConnection(c, "Close " + logoutContext);
+                    deleteClosedConnection(c, "Close " + logoutContext);
                     return true;
                 }
             }
@@ -690,6 +695,7 @@ public class SessionManager extends Thread {
         con.writeMsg(msg);
         String closeContext = "Close Connection Context: Registration Failed (in registrationFailed, in SessionManager)";
         closeConnection(con, closeContext);
+        deleteClosedConnection(con, closeContext);
     }
 
     /**
@@ -794,7 +800,6 @@ public class SessionManager extends Thread {
     /** Initiate closure of a given connection and remove from the appropriate array
      * @param c The connection to be closed  */
     public void closeConnection(Connection c, String closeConnectionContext) {
-        deleteClosedConnection(c, closeConnectionContext);
         c.setHasLoggedOut(true);
         c.closeCon(serverId);
     }
@@ -867,6 +872,7 @@ public class SessionManager extends Thread {
             if (disconnect) {
                 con.setHasLoggedOut(true);
                 closeConnection(con, logoutContext);
+                deleteClosedConnection(con, logoutContext);
             }
             return true;
         }

@@ -203,7 +203,9 @@ public class Responder {
 
                     boolean wasClient = sessionManager.logoutClient(con, logoutContext, true, true, null);
                     if (!wasClient) {
-                        sessionManager.closeConnection(con, "Context: Received INVALID_MESSAGE");
+                        String closeConContext = "Context: Received INVALID_MESSAGE";
+                        sessionManager.closeConnection(con, closeConContext);
+                        sessionManager.deleteClosedConnection(con, closeConContext);
                     }
                 }
             });
