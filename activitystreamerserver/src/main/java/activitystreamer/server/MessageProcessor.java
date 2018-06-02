@@ -79,6 +79,8 @@ public class MessageProcessor {
             case "SERVER_ANNOUNCE":
                 return ((json.containsKey("id") && json.containsKey("load") && json.containsKey("hostname") &&
                         json.containsKey("port") && isValidServerAuthMsg) ? null : missingFieldMsg);
+            case "ANON_LOGOUT_BROADCAST":
+                return (containsLoginInfo ? null : missingFieldMsg);
             case "LOGIN":
             case "REGISTER":
             case "LOCK_REQUEST":
@@ -233,6 +235,7 @@ public class MessageProcessor {
             case "SIBLING_CRASHED":
             case "LOGIN_BROADCAST":
             case "LOGOUT_BROADCAST":
+            case "ANON_LOGOUT_BROADCAST":
                 if (!serverAuthenticated) {
                    return "Message received from an unauthenticated server";
                 }

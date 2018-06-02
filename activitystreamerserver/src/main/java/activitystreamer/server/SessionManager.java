@@ -159,10 +159,11 @@ public class SessionManager extends Thread {
 
         // If the message is an INVALID_MESSAGE or LOGOUT message, close the connection.
         if (command.equals("INVALID_MESSAGE") || command.equals("LOGOUT") || command.equals("AUTHENTICATION_FAIL")) {
-            if (!serverRegistry.isServerCon(con)) {
-                con.setHasLoggedOut(true);
+
+            if (serverRegistry.isServerCon(con)) {
+                con.writeMsg(MessageProcessor.getShutdownMessage(serverId));
             }
-            con.closeCon(serverId);
+            con.closeCon();
             return true;        // true because we want terminate = true; makes con delete itself from SessionManager
         }
 
@@ -421,7 +422,7 @@ public class SessionManager extends Thread {
         con.writeMsg(msg);
         String closeContext = "Close Connection Context: Authenticate Failed (in serverAuthenticateFailed, in SessionManager)";
         closeConnection(con, closeContext);
-        deleteClosedConnection(con, closeContext);
+        deleteClosedConnection(con);
     }
 
     public void serverAuthenticateSuccess(Connection con, ConnectedServer newChild) {
@@ -479,7 +480,7 @@ public class SessionManager extends Thread {
         con.writeMsg(msg);
         String closeContext = "Close Connection Context: Client failed to login (in clientLoginFailed, in SessionManager)";
         closeConnection(con, closeContext);
-        deleteClosedConnection(con, closeContext);
+        deleteClosedConnection(con);
     }
 
     /** Log in a client that is not anonymous, by checking username and password combination match that
@@ -587,12 +588,10 @@ public class SessionManager extends Thread {
                     logoutSuccess = logoutClient(c, logoutContext, doDisconnect, true, null);
                     if (logoutSuccess) {
                         disconnect = true;
-                        c.setHasLoggedOut(true);
                     }
                 }
                 else {
                     disconnect = true;
-                    c.setHasLoggedOut(true);
                 }
                 if (disconnect) {
                     log.info("about to call redirect message, waiting 2 secs\n");
@@ -601,7 +600,7 @@ public class SessionManager extends Thread {
                     // LOGOUT_BROADCAST should have been sent. Will now disconnect user and log them out.
                     c.writeMsg(msg);
                     closeConnection(c, "Close " + logoutContext);
-                    deleteClosedConnection(c, "Close " + logoutContext);
+                    deleteClosedConnection(c);
                     return true;
                 }
             }
@@ -697,7 +696,7 @@ public class SessionManager extends Thread {
         con.writeMsg(msg);
         String closeContext = "Close Connection Context: Registration Failed (in registrationFailed, in SessionManager)";
         closeConnection(con, closeContext);
-        deleteClosedConnection(con, closeContext);
+        deleteClosedConnection(con);
     }
 
     /**
@@ -772,8 +771,14 @@ public class SessionManager extends Thread {
 
     public void forwardToChildren(String msg) {
         ConcurrentHashMap<ConnectedServer, Connection> children = serverRegistry.getConnectedChildConnections();
-
         for (Connection con : children.values()) {
+            con.writeMsg(msg);
+        }
+    }
+
+    public void forwardToParent(String msg) {
+        Connection con = serverRegistry.getParentConnection();
+        if (con != null) {
             con.writeMsg(msg);
         }
     }
@@ -802,8 +807,8 @@ public class SessionManager extends Thread {
     /** Initiate closure of a given connection and remove from the appropriate array
      * @param c The connection to be closed  */
     public void closeConnection(Connection c, String closeConnectionContext) {
-        c.setHasLoggedOut(true);
-        c.closeCon(serverId);
+        System.out.println("Closed Connection: " + closeConnectionContext);
+        c.closeCon();
     }
 
     /**
@@ -811,15 +816,8 @@ public class SessionManager extends Thread {
      * Removes the connection from the appropriate data structure, depending on who the connection is with.
      * @param con The connection to be closed
      */
-    public synchronized void deleteClosedConnection(Connection con, String closeConnectionContext) {
+    public synchronized void deleteClosedConnection(Connection con) {
 
-//        if (serverRegistry.isParentConnection(con)) {
-//            serverRegistry.setNoParent();
-//        }
-//        if (serverRegistry.isServerCon(con)) {
-//
-//            serverRegistry.removeCon(con);
-//        }
         if (clientConnections.containsKey(con)) {
             // Close connection to another client
             // Generate appropriate logout broadcast, depending on if client was registered or anonymous
@@ -838,7 +836,6 @@ public class SessionManager extends Thread {
             }
             System.out.println("REMOVING CONNECTION FROM clientConnections     -> username = " + client.getUsername());
             clientConnections.remove(con);
-
         }
         else {
             // Closing the connection to an unauthenticated server/client not logged in
@@ -853,7 +850,6 @@ public class SessionManager extends Thread {
             String secret = client.getSecret();
             if (MessageProcessor.isAnonymous(username)) {
                 logoutAnonClient(con, logoutContext, username, secret, bcast);
-                con.setHasLoggedOut(true);
                 return true;
             }
             else {
@@ -868,13 +864,11 @@ public class SessionManager extends Thread {
                 if (!logoutToken.equals(Integer.MIN_VALUE) && bcast) {
                     String logoutBroadcastMsg = MessageProcessor.getLogoutBroadcast(username, secret, logoutToken);
                     serverBroadcast(logoutBroadcastMsg);
-                    con.setHasLoggedOut(true);
                 }
             }
             if (disconnect) {
-                con.setHasLoggedOut(true);
                 closeConnection(con, logoutContext);
-                deleteClosedConnection(con, logoutContext);
+                deleteClosedConnection(con);
             }
             return true;
         }

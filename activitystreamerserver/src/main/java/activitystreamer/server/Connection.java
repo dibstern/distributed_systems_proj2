@@ -84,26 +84,14 @@ public class Connection extends Thread {
     /**
      * Closes a connection and handles appropriate shutdown
      */
-    public void closeCon(String thisServerId) {
+    public void closeCon() {
         if (open) {
             log.info("closing connection " + Settings.socketAddress(socket));
             try {
-                try {
-                    if (!hasLoggedOut) {
-                        writeMsg(MessageProcessor.getShutdownMessage(thisServerId));
-                    }
-                }
-                catch (Exception e) {
-                    // do nothing
-                }
-                finally {
-                    // Sleep for 2 seconds to allow the receipt of shutdown messages to prompt servers to close connections gracefully
-                    // SessionManager.getInstance().delayThread(2000);
-                    term = true;
-                    inreader.close();
-                    out.close();
-                    open = false;
-                }
+                term = true;
+                inreader.close();
+                out.close();
+                open = false;
             }
             catch (IOException e) {
                 // already closed?
@@ -120,7 +108,7 @@ public class Connection extends Thread {
      * TODO: Insert while(retry) loop and a 2 sec delay after a broken network connection
      */
     public void run() {
-
+        String closeContext;
         try {
             String data;
             while (!term && (data = inreader.readLine()) != null) {
@@ -132,40 +120,29 @@ public class Connection extends Thread {
 
             // Ensure the user is recorded as being logged out in the ClientRegistry
             SessionManager.getInstance().ensureLogoutDisconnectedClient(this);
+            closeContext = "Close Connection Context: connection closed naturally (in run, in Connection)";
+            System.out.println(closeContext);
 
-            String closeContext = "Close Connection Context: connection closed naturally (in run, in Connection)";
-            // retry = false;
-            // Connection is crashed, not closed gracefully. Thus, reconnect to a new parent
-            if (SessionManager.getInstance().getServerRegistry().isParentConnection(this) &&
-                    !SessionManager.getInstance().isReconnecting()) {
-                SessionManager.getInstance().reconnectParentIfDisconnected();
-            }
-            SessionManager.getInstance().deleteClosedConnection(this, closeContext);
-            this.setHasLoggedOut(true);
-            this.closeCon(SessionManager.getServerId());
         }
         catch (IOException e) {
             log.error("connection " + Settings.socketAddress(socket) + " closed with exception: " + e);
-            String closeContext = "Close Connection Context: connection closed with exception (in run, in Connection)";
+            closeContext = "Close Connection Context: connection closed with exception (in run, in Connection)";
             System.out.println(closeContext);
+        }
+        finally {
             boolean isParent = SessionManager.getInstance().getServerRegistry().isParentConnection(this);
             System.out.println("Is this parent connection? Answer: " + isParent);
             if (isParent && !SessionManager.getInstance().isReconnecting()) {
                 SessionManager.getInstance().reconnectParentIfDisconnected();
             }
-        }
-        finally {
             open = false;
-            // SessionManager.getInstance().reconnectParentIfDisconnected();
+            SessionManager.getInstance().deleteClosedConnection(this);
+            this.closeCon();
         }
     }
 
     public boolean isOpen() {
         return this.open;
-    }
-
-    public void setHasLoggedOut(boolean loggedOut) {
-        this.hasLoggedOut = loggedOut;
     }
 
     @Override

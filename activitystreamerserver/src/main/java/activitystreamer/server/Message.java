@@ -55,9 +55,7 @@ public class Message implements Comparable<Message> {
      * @return true if this Message instance should be deleted. false, otherwise.
      */
     public boolean receivedMessages(ArrayList<String> users) {
-        users.forEach((user) -> {
-            receivedMessage(user);
-        });
+        users.forEach(this::receivedMessage);
         if (this.recipients.size() == 0) {
             return true;
         }

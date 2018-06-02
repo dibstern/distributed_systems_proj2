@@ -205,7 +205,7 @@ public class Responder {
                     if (!wasClient) {
                         String closeConContext = "Context: Received INVALID_MESSAGE";
                         sessionManager.closeConnection(con, closeConContext);
-                        sessionManager.deleteClosedConnection(con, closeConContext);
+                        sessionManager.deleteClosedConnection(con);
                     }
                 }
             });
@@ -225,7 +225,6 @@ public class Responder {
                     }
                     System.out.println("About to use serverRegistry to reconnect: " + sessionManager.getServerRegistry().toString());
                     String closeConnectionContext = "Close Connection Context: Received SERVER_SHUTDOWN (in Responder)";
-                    con.setHasLoggedOut(true);
                     if (serverRegistry.isParentConnection(con)) {
                         serverRegistry.removeCrashedParent();
                         sessionManager.reconnectParentIfDisconnected();
@@ -404,11 +403,14 @@ public class Responder {
                     String sender = json.get("sender").toString();
                     JSONObject messageAcks = (JSONObject) json.get("messages");
 
+                    SessionManager sessionManager = SessionManager.getInstance();
+
                     // Parse the JSON to create a HashMap of Message ACKs and register them in the ClientRegistry
                     HashMap<Integer, ArrayList<String>> ackMap = MessageProcessor.acksToHashMap(messageAcks);
                     if (ackMap != null) {
-                        SessionManager.getInstance().getClientRegistry().registerAcks(ackMap, sender);
+                        sessionManager.getClientRegistry().registerAcks(ackMap, sender);
                     }
+                    sessionManager.forwardServerMsg(con, json.toString());
                 }
             });
             /* ... */

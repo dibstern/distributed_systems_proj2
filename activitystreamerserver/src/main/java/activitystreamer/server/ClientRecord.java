@@ -20,6 +20,7 @@ public class ClientRecord {
     private Integer received_up_to;
     private ArrayList<Message> messages;
     private ArrayList<Message> undeliverable_messages;
+    private Boolean delete_after_delivering;
 
 
     public ClientRecord(String username, String secret) {
@@ -30,6 +31,7 @@ public class ClientRecord {
         this.received_up_to = 0;
         this.messages = new ArrayList<Message>();
         this.undeliverable_messages = new ArrayList<Message>();
+        delete_after_delivering = false;
     }
 
     public ClientRecord(JSONObject clientRecordJson) {
@@ -46,6 +48,7 @@ public class ClientRecord {
         this.undeliverable_messages = MessageProcessor.getGson().fromJson(
                 ((JSONArray) clientRecordJson.get("undeliverable_messages")).toJSONString(),
                 collectionType);
+        delete_after_delivering = (boolean) clientRecordJson.get("delete_after_delivering");
     }
 
     /**
@@ -69,6 +72,11 @@ public class ClientRecord {
                 collectionType);
         if (receivedUndeliverableMessages != null) {
             updateMessages(receivedUndeliverableMessages);
+        }
+
+        boolean new_delete = (boolean) receivedRecord.get("delete_after_delivering");
+        if (!delete_after_delivering) {
+            delete_after_delivering = new_delete;
         }
     }
 
@@ -242,13 +250,21 @@ public class ClientRecord {
     }
 
     public void receivedMessage(ArrayList<String> receivers, Integer token) {
+        System.out.println("RECORDING RECEIVED MESSAGE FOR " + username);
         boolean allDelivered = false;
         for (Message message : messages) {
             if (message.getToken().equals(token)) {
-                allDelivered = message.receivedMessages(receivers);
+                if (allDelivered) {
+                    allDelivered = message.receivedMessages(receivers);
+                    allDelivered = true;
+                }
+                else {
+                    allDelivered = message.receivedMessages(receivers);
+                }
             }
         }
         if (allDelivered) {
+            System.out.println("ALL DELIVERED -> DELETING MESSAGE!");
             deleteMessage(token);
         }
     }
@@ -258,7 +274,7 @@ public class ClientRecord {
         return this.next_token;
     }
 
-    private void deleteMessage(Integer token) {
+    public void deleteMessage(Integer token) {
         messages.removeIf(m -> m.getToken().equals(token));
     }
 
@@ -310,6 +326,11 @@ public class ClientRecord {
     }
 
 
+    public boolean hasMessagesToDeliver() {
+        return (messages.size() > 0 || undeliverable_messages.size() > 0);
+    }
+
+
     // ------------------------------ COMPARING RECORDS ------------------------------
     @Override
     public boolean equals(Object obj) {
@@ -337,6 +358,18 @@ public class ClientRecord {
         // Used if we implement a sender field
         // hash = 53 * hash + this.sender;
         return hash;
+    }
+
+    public void deleteAfterMsgsDelivered() {
+        this.delete_after_delivering = true;
+    }
+
+    public boolean deleteAfterDelivered() {
+        return this.delete_after_delivering && !hasMessagesToDeliver();
+    }
+
+    public boolean anonToDelete() {
+        return this.delete_after_delivering;
     }
 
 

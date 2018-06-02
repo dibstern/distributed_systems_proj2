@@ -52,7 +52,7 @@ public class ClientRegistry {
                 ClientRecord oldClientRecord = clientRecords.get(username);
                 Integer loginToken = oldClientRecord.getLoggedInToken();
                 if (MessageProcessor.isAnonymous(username) && loginToken >= 3) {
-                    clientRecords.remove(username);
+                    removeUser(username);
                 }
                 else {
                     // Update if the record has the correct secret
@@ -68,7 +68,9 @@ public class ClientRegistry {
             }
             // Or create a new record
             else {
-                addRecord(username, givenRecord);
+                if (!givenRecord.anonToDelete()) {
+                    addRecord(username, givenRecord);
+                }
             }
         });
         // If we have an anon record that the given registry does not have & the user isn't logged in locally, send an
@@ -84,7 +86,7 @@ public class ClientRegistry {
 
                 // Bcast ANON_CHECK & delete user from the registry (added back if & when we get an ANON_SUCCESS msg)
                 SessionManager.getInstance().serverBroadcast(anonCheckMsg);
-                clientRecords.remove(user);
+                removeUser(user);
             }
         });
     }
@@ -167,7 +169,11 @@ public class ClientRegistry {
         else {
             tokenUsed = getLoginToken(user, login) + 1;
         }
-        return getClientRecord(user).updateLoggedIn(tokenUsed, loginContext);
+        ClientRecord userRecord = getClientRecord(user);
+        if (userRecord != null) {
+            return userRecord.updateLoggedIn(tokenUsed, loginContext);
+        }
+        return Integer.MIN_VALUE;
     }
 
     private Integer getLoginToken(String user, Boolean login) {
@@ -222,8 +228,14 @@ public class ClientRegistry {
      */
     public boolean removeUser(String username) {
         if (clientRecords.containsKey(username)) {
-            clientRecords.remove(username);
-            return true;
+            if (!clientRecords.get(username).hasMessagesToDeliver()) {
+                System.out.println("REMOVING ANON CLIENTRECORD ->" + username);
+                clientRecords.remove(username);
+                return true;
+            }
+            else {
+                clientRecords.get(username).deleteAfterMsgsDelivered();
+            }
         }
         return false;
     }
@@ -294,6 +306,8 @@ public class ClientRegistry {
                                                                    String sender, ClientRecord senderRecord) {
         HashMap<Integer, ArrayList<String>> acks = new HashMap<Integer, ArrayList<String>>();
 
+        boolean allDelivered;
+
         // While there are messages that can be sent, send them!
         Message m = senderRecord.getNextMessage(recipient);
         while (m != null) {
@@ -304,6 +318,7 @@ public class ClientRegistry {
             con.writeMsg(activityBroadcastMsg.toString());
 
             if (SessionManager.getInstance().clientStillConnected(con)) {
+
                 // Record the message as sent
                 m.receivedMessage(recipient);
 
@@ -312,9 +327,12 @@ public class ClientRegistry {
                 users.add(recipient);
                 acks.put(token, users);
             }
-
             // Attempt to retrieve another message
             m = senderRecord.getNextMessage(recipient);
+
+            if (senderRecord.deleteAfterDelivered()) {
+                removeUser(sender);
+            }
         }
         // Return our messages to acknowledge
         return acks;
@@ -341,6 +359,8 @@ public class ClientRegistry {
 
         clientConnections.forEach((user, con) -> {
 
+            boolean allDelivered;
+
             // Send all possible messages to client
             Message m = senderRecord.getNextMessage(user);
             while (m != null) {
@@ -351,8 +371,8 @@ public class ClientRegistry {
 
                 con.writeMsg(activityBroadcastMsg.toString());
                 System.out.println("Just wrote " + activityBroadcastMsg.toString() + "to " + user);
-                SessionManager.getInstance().delayThread(2000);
                 if (con.isOpen()) {
+
                     // Record the message as sent
                     m.receivedMessage(user);
 
@@ -366,6 +386,9 @@ public class ClientRegistry {
                         acks.get(token).add(user);
                     }
                     m = senderRecord.getNextMessage(user);
+                    if (senderRecord.deleteAfterDelivered()) {
+                        removeUser(sender);
+                    }
                 }
                 // If the connection is closed, don't send
                 else {
@@ -400,10 +423,18 @@ public class ClientRegistry {
      */
     public void registerAcks(HashMap<Integer, ArrayList<String>> acks, String sender) {
 
+        System.out.println("REGISTERING ACKS FROM " + sender);
+
         // Report the messages as having been sent
         if (userExists(sender)) {
+            System.out.println(sender + " exists!");
             ClientRecord senderRecord = getClientRecord(sender);
             acks.forEach((token, recipients) -> senderRecord.receivedMessage(recipients, token));
+            System.out.println("FINISHED senderRecord.receivedMessage(...)");
+            if (senderRecord.deleteAfterDelivered()) {
+                System.out.println("Deleting " + sender + " after having delivered messages!");
+                removeUser(sender);
+            }
         }
     }
 
@@ -415,25 +446,32 @@ public class ClientRegistry {
 
     // ------------------------------ GENERAL GETTERS & SETTERS ------------------------------
 
-    public synchronized ClientRecord getClientRecord(String user) {
+//    public synchronized ClientRecord getClientRecord(String user) {
+//
+//        try {
+//            ClientRecord record = clientRecords.get(user);
+//            if (record == null) {
+//                String errorMsg = "ERROR: - getClientRecord in clientRegistry - user: " + user +
+//                        " not in clientRecords" + clientRecords;
+//                throw new RecordAccessException(errorMsg);
+//            }
+//            else {
+//                return record;
+//            }
+//        }
+//        catch (RecordAccessException e) {
+//            e.printStackTrace();
+//            SessionManager.logDebug(e.getMessage());
+//            System.exit(1);
+//            return null;
+//        }
+//    }
 
-        try {
-            ClientRecord record = clientRecords.get(user);
-            if (record == null) {
-                String errorMsg = "ERROR: - getClientRecord in clientRegistry - user: " + user +
-                        " not in clientRecords" + clientRecords;
-                throw new RecordAccessException(errorMsg);
-            }
-            else {
-                return record;
-            }
-        }
-        catch (RecordAccessException e) {
-            e.printStackTrace();
-            SessionManager.logDebug(e.getMessage());
-            System.exit(1);
+    public synchronized ClientRecord getClientRecord(String user) {
+        if (!clientRecords.containsKey(user)) {
             return null;
         }
+        return clientRecords.get(user);
     }
 
     @Override
