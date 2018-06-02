@@ -267,13 +267,10 @@ public class ClientRegistry {
         return ackMessages;
     }
 
-    public Integer getClientToken(ConnectedClient client)
-    {
+    public Integer getClientToken(ConnectedClient client) {
         ClientRecord tmp = clientRecords.get(client.getUsername());
         return tmp.getToken();
     }
-
-
 
     public JSONObject sendWaitingMessages(Connection con, String recipient, String sender) {
         ClientRecord senderRecord = getClientRecord(sender);
@@ -408,16 +405,11 @@ public class ClientRegistry {
         }
     }
 
-
-
     public void clearRecipientFromAllMsgs(String user) {
         clientRecords.forEach((sender, senderRecord) -> {
            senderRecord.clearRecipientFromAllMsgs(user);
         });
     }
-
-
-
 
     // ------------------------------ GENERAL GETTERS & SETTERS ------------------------------
 
