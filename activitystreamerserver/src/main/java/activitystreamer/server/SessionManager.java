@@ -279,6 +279,8 @@ public class SessionManager extends Thread {
                 log.info("Succeeded in repairing network partition due to server failure.");
 
                 // Send a "GRANDPARENT_UPDATE" message to children.
+                String msg = MessageProcessor.getGrandparentUpdateMsg(newParent.toJson());
+                forwardToChildren(msg);
             }
         }
         this.reconnecting = false;
