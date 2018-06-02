@@ -235,6 +235,12 @@ public class ServerRegistry {
         return server_connections.get(con);
     }
 
+    public ConnectedServer getServerInfo(String serverId) {
+        if (all_servers.containsKey(serverId)) {
+            return all_servers.get(serverId);
+        }
+        return null;
+    }
 
     // ------------------------------ GENERAL ------------------------------
 
@@ -262,7 +268,7 @@ public class ServerRegistry {
 
     public void closeServerCons() {
         server_connections.forEach((con, server) -> {
-            con.writeMsg(MessageProcessor.getShutdownMessage());
+            con.writeMsg(MessageProcessor.getShutdownMessage(server.getId()));
         });
         server_connections.clear();
     }

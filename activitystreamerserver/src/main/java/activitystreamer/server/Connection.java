@@ -84,13 +84,13 @@ public class Connection extends Thread {
     /**
      * Closes a connection and handles appropriate shutdown
      */
-    public void closeCon() {
+    public void closeCon(String thisServerId) {
         if (open) {
             log.info("closing connection " + Settings.socketAddress(socket));
             try {
                 try {
                     if (!hasLoggedOut) {
-                        writeMsg(MessageProcessor.getShutdownMessage());
+                        writeMsg(MessageProcessor.getShutdownMessage(thisServerId));
                     }
                 }
                 catch (Exception e) {

@@ -162,7 +162,7 @@ public class SessionManager extends Thread {
             if (!serverRegistry.isServerCon(con)) {
                 con.setHasLoggedOut(true);
             }
-            con.closeCon();
+            con.closeCon(serverId);
             return true;        // true because we want terminate = true; makes con delete itself from SessionManager
         }
 
@@ -795,7 +795,7 @@ public class SessionManager extends Thread {
     public void closeConnection(Connection c, String closeConnectionContext) {
         deleteClosedConnection(c, closeConnectionContext);
         c.setHasLoggedOut(true);
-        c.closeCon();
+        c.closeCon(serverId);
     }
 
     /**

@@ -212,6 +212,14 @@ public class Responder {
                 public void execute(JSONObject json, Connection con) {
                     SessionManager sessionManager = SessionManager.getInstance();
                     ServerRegistry serverRegistry = sessionManager.getServerRegistry();
+                    String shutdownServerId = json.get("id").toString();
+                    ConnectedServer shutdownServer = serverRegistry.getServerInfo(shutdownServerId);
+                    if (shutdownServer != null) {
+                        System.out.println("Received SERVER_SHUTDOWN from " + shutdownServer.toString());
+                    }
+                    else {
+                        System.out.println("Received SERVER_SHUTDOWN from server not in all_servers in ServerRegistry!");
+                    }
                     System.out.println("About to use serverRegistry to reconnect: " + sessionManager.getServerRegistry().toString());
                     String closeConnectionContext = "Close Connection Context: Received SERVER_SHUTDOWN (in Responder)";
                     con.setHasLoggedOut(true);

@@ -613,11 +613,11 @@ public class MessageProcessor {
         return cleanedActMsg;
     }
 
-    public static String getShutdownMessage() {
+    public static String getShutdownMessage(String thisServerId) {
         JSONObject shutdownMessage = new JSONObject();
 
         shutdownMessage.put("command", "SERVER_SHUTDOWN");
-
+        shutdownMessage.put("id", thisServerId);
         return shutdownMessage.toString();
     }
 
