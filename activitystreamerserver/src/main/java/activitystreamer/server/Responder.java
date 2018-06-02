@@ -212,6 +212,7 @@ public class Responder {
                 public void execute(JSONObject json, Connection con) {
                     SessionManager sessionManager = SessionManager.getInstance();
                     ServerRegistry serverRegistry = sessionManager.getServerRegistry();
+                    System.out.println("serverRegistry BEFORE SERVER_SHUTDOWN CHANGES" + serverRegistry.toString());
                     String shutdownServerId = json.get("id").toString();
                     ConnectedServer shutdownServer = serverRegistry.getServerInfo(shutdownServerId);
                     if (shutdownServer != null) {
@@ -238,6 +239,7 @@ public class Responder {
                         String msg = MessageProcessor.getSiblingCrashed(crashedSibling);
                         sessionManager.forwardToChildren(msg);
                     }
+                    System.out.println("serverRegistry AFTER SERVER_SHUTDOWN CHANGES" + serverRegistry.toString());
                 }
             });
 
