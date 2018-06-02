@@ -20,6 +20,7 @@ import java.util.Map;
 public class Responder {
 
     private static final boolean TESTING_DELAY = true;
+    private static final boolean DEBUG = true;
 
     /**
      * @param json The JSON object received from the client
@@ -78,7 +79,10 @@ public class Responder {
                             sessionManager.serverBroadcast(MessageProcessor.getLoginBroadcast(user, secret, token));
                         }
                         // Check if client should be redirected to another server
-                        sessionManager.delayThread(500);
+                        // TODO: Check if this can be removed
+                        if (TESTING_DELAY) {
+                            sessionManager.delayThread(500);
+                        }
                         boolean redirected = sessionManager.checkRedirectClient(con, false);
 
                         // If not redirected, send the user all of the messages that are waiting for them
@@ -151,9 +155,9 @@ public class Responder {
 
                     // Add message and its expected recipients to ClientRegistry and retrieve the allocated token
                     Integer msgToken = clientRegistry.addMsgToRegistry(user, clientMessage, loggedInUsers);
-
-                    System.out.println("My Registry, as of registering the received message " +
-                            "(" + json.toString() + "): " + clientRegistry);
+                    if (DEBUG) {
+                        System.out.println("My Registry, as of registering the received message (" + json.toString() + "): " + clientRegistry);
+                    }
 
                     // Add message token & recipients to ACTIVITY_BROADCAST message
                     String activityBroadcastMsg = MessageProcessor.getActivityBroadcastMsg(clientMessage, loggedInUsers,
@@ -221,18 +225,21 @@ public class Responder {
                 public void execute(JSONObject json, Connection con) {
                     SessionManager sessionManager = SessionManager.getInstance();
                     ServerRegistry serverRegistry = sessionManager.getServerRegistry();
-                    System.out.println("serverRegistry BEFORE SERVER_SHUTDOWN CHANGES" + serverRegistry.toString());
+                    if (DEBUG) {
+                        System.out.println("serverRegistry BEFORE SERVER_SHUTDOWN CHANGES" + serverRegistry.toString());
+                    }
                     String shutdownServerId = json.get("id").toString();
                     ConnectedServer shutdownServer = serverRegistry.getServerInfo(shutdownServerId);
-                    // Check if we already knew about the server
-                    if (shutdownServer != null) {
+                    if (DEBUG && shutdownServer != null) {
                         System.out.println("Received SERVER_SHUTDOWN from " + shutdownServer.toString());
                     }
-                    else {
+                    else if (DEBUG) {
                         System.out.println("Received SERVER_SHUTDOWN from server not in all_servers in ServerRegistry!");
                     }
-                    System.out.println("About to use serverRegistry to reconnect: "
-                            + sessionManager.getServerRegistry().toString());
+                    if (DEBUG) {
+                        System.out.println("About to use serverRegistry to reconnect: " +
+                                sessionManager.getServerRegistry().toString());
+                    }
                     String closeConnectionContext = "Close Connection Context: Received SERVER_SHUTDOWN (in Responder)";
                     // If the server was our parent, remove from our local storage
                     if (serverRegistry.isParentConnection(con)) {
@@ -250,7 +257,9 @@ public class Responder {
                         String msg = MessageProcessor.getSiblingCrashed(crashedSibling);
                         sessionManager.forwardToChildren(msg);
                     }
-                    System.out.println("serverRegistry AFTER SERVER_SHUTDOWN CHANGES" + serverRegistry.toString());
+                    if (DEBUG) {
+                        System.out.println("serverRegistry AFTER SERVER_SHUTDOWN CHANGES" + serverRegistry.toString());
+                    }
                 }
             });
 
@@ -326,6 +335,9 @@ public class Responder {
                         // We do not have a grandparent to connect to if parent crashes, set as NULL
                         serverRegistry.setNoGrandparent();
                     }
+                    if (DEBUG) {
+                        System.out.println("Updated Server Registry: " + serverRegistry.toString());
+                    }
                 }
             });
             /* A new server has connected to our parent server, and therefore is one of our siblings. Add this server
@@ -336,6 +348,9 @@ public class Responder {
                     ServerRegistry serverRegistry = SessionManager.getInstance().getServerRegistry();
                     JSONObject siblingRecord = (JSONObject) json.get("new_sibling");
                     serverRegistry.addSibling(siblingRecord);
+                    if (DEBUG) {
+                        System.out.println("Updated Server Registry: " + serverRegistry.toString());
+                    }
                 }
             });
             /* One of our siblings (a server connected to our parent) has crashed - remove this server from our
@@ -343,16 +358,21 @@ public class Responder {
             responses.put("SIBLING_CRASHED", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
-                    System.out.println(json.toString());
                     ServerRegistry serverRegistry = SessionManager.getInstance().getServerRegistry();
-                    System.out.println("serverRegistry BEFORE SIBLING_CRASHED CHANGES" + serverRegistry.toString());
+                    if (DEBUG) {
+                        System.out.println(json.toString());
+                        System.out.println("serverRegistry BEFORE SIBLING_CRASHED CHANGES" + serverRegistry.toString());
+                    }
                     JSONObject siblingRecord = (JSONObject) json.get("crashed_sibling");
                     String id = siblingRecord.get("id").toString();
                     String hostname = siblingRecord.get("hostname").toString();
                     Integer port =  ((Long) siblingRecord.get("port")).intValue();
                     ConnectedServer tmp = new ConnectedServer(id, hostname, port, false, false);
                     serverRegistry.removeCrashedSibling(tmp);
-                    System.out.println("serverRegistry AFTER SIBLING_CRASHED CHANGES" + serverRegistry.toString());
+                    if (DEBUG) {
+                        System.out.println("serverRegistry AFTER SIBLING_CRASHED CHANGES" + serverRegistry.toString());
+                    }
+
                 }
             });
             /* Another server in the network has a direct connection to a given anonymous client. Add this client record
@@ -505,6 +525,7 @@ public class Responder {
                     else {
                         serverRegistry.updateRegistry(id, load, hostname, port, true);
                     }
+
                     // Forward to all other servers that this server is connected to
                     sessionManager.forwardServerMsg(con, json.toString());
 

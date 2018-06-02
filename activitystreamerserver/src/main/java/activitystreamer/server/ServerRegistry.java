@@ -450,7 +450,7 @@ public class ServerRegistry {
      * @return true if we are the designated root sibling, false otherwise */
     public boolean amRootSibling() {
         Collections.sort(siblings_list);
-        return (siblings_list.size() > 1 && siblings_list.get(0).equals(this_server));
+        return (siblings_list.size() > 1 && siblings_list.get(0).equals(this_server) || siblings_list.size() == 1);
     }
 
     /** Adds a server to the queue of servers we will attempt to initiate a connection to, during a network partition

@@ -236,7 +236,7 @@ public class SessionManager extends Thread {
      * We know the parent has been disconnected. Try to reconnect to a different server.
      */
     public synchronized void reconnectParentIfDisconnected() {
-        this.reconnecting = true;
+        reconnecting = true;
         boolean reconnected = false;
         ConcurrentLinkedQueue<ConnectedServer> consToTry = serverRegistry.getConsToTry();
 
@@ -245,6 +245,9 @@ public class SessionManager extends Thread {
         if (grandparent != null) {
             log.info("Should be connecting to grandparent here.");
             reconnected = initiateConnection(grandparent);
+            if (reconnected) {
+                serverRegistry.setNoGrandparent();
+            }
         }
         boolean rootSibling = serverRegistry.amRootSibling();
         ConnectedServer conToTry;
@@ -262,11 +265,13 @@ public class SessionManager extends Thread {
         // Check if we are the new root server of the network
         if (!reconnected && rootSibling) {
             log.info("This server is the new parent server, allowing other servers to connect to this one.");
+            String msg =  MessageProcessor.getGrandparentUpdateMsg(null);
+            forwardToChildren(msg);
         }
         else if (!reconnected) {
             log.info("Unable to reconnect to any new servers. Unrepairable partition.");
         }
-        // Must have reconnected to the grandparent
+        // Must have reconnected!
         else {
             ConnectedServer newParent = serverRegistry.getParentInfo();
             Connection newParentCon = serverRegistry.getParentConnection();
@@ -278,13 +283,13 @@ public class SessionManager extends Thread {
                 forwardToChildren(msg);
             }
         }
-        this.reconnecting = false;
+        reconnecting = false;
     }
 
     /** Checks if server is in the process of reconnecting with the rest of the network/fixing the network
      * partition. */
-    public boolean isReconnecting() {
-        return this.reconnecting;
+    public static boolean isReconnecting() {
+        return reconnecting;
     }
 
     /** Closes all client and server connections a server has. */
