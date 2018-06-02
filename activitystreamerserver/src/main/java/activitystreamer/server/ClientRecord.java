@@ -90,15 +90,17 @@ public class ClientRecord {
 
     private boolean updateMessage(Message msg) {
         AtomicBoolean messageFound = new AtomicBoolean(false);
+        ArrayList<Message> messagesToRemove = new ArrayList<Message>();
         this.messages.forEach((message) -> {
             if (message.equals(msg)) {
                 messageFound.set(true);
                 boolean allDelivered = message.updateRecipients(msg.getRemainingRecipients());
                 if (allDelivered) {
-                    this.messages.remove(message);
+                    messagesToRemove.add(message);
                 }
             }
         });
+        this.messages.removeIf((m) -> messagesToRemove.contains(m));
         return messageFound.get();
     }
 
