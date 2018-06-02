@@ -526,7 +526,7 @@ public class Responder {
                     sessionManager.registrationFailed(username, secret, con);
 
                     // Forward the LOCK_DENIED message to all other connections
-                    sessionManager.broadcastMessage(con, json.toString());
+                    sessionManager.serverBroadcast(json.toString());
                 }
             });
 
