@@ -71,9 +71,11 @@ public class ClientRegistry {
                 addRecord(username, givenRecord);
             }
         });
-        // If we have an anon record that the given registry does not have, send an ANON_CHECK & delete the record
+        // If we have an anon record that the given registry does not have & the user isn't logged in locally, send an
+        // ANON_CHECK & delete the record
         clientRecords.forEach((user, record) -> {
-            if (MessageProcessor.isAnonymous(user) && !givenRegistry.containsKey(user)) {
+            if (MessageProcessor.isAnonymous(user) && !givenRegistry.containsKey(user) && record.getLoggedInToken() > 1
+                    && !SessionManager.getInstance().clientLoggedInLocally(user, record.getSecret())) {
 
                 // Convert the record into a JSONObject
                 String recordJsonString = MessageProcessor.getGson().toJson(record);

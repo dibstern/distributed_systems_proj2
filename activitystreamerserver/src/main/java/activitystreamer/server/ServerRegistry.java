@@ -290,7 +290,7 @@ public class ServerRegistry {
 
     public void closeServerCons() {
         server_connections.forEach((con, server) -> {
-            con.writeMsg(MessageProcessor.getShutdownMessage(server.getId()));
+            con.writeMsg(MessageProcessor.getShutdownMessage(this_server.getId()));
         });
         server_connections.clear();
     }

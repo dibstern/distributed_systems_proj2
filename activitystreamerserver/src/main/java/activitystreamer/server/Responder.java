@@ -415,6 +415,9 @@ public class Responder {
             responses.put("LOGIN_BROADCAST", new ServerCommand() {
                 @Override
                 public void execute(JSONObject json, Connection con) {
+
+                    System.out.println("RECEIVED LOGIN_BROADCAST: " + json.toString());
+
                     String user = json.get("username").toString();
                     String secret = json.get("secret").toString();
 

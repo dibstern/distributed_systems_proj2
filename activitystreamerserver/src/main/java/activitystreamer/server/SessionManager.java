@@ -543,6 +543,8 @@ public class SessionManager extends Thread {
      * @param c The connection a client is using
      * @param username The username supplied by the client **/
     public Integer loginAnonymousClient(Connection c, String username, String secret) {
+
+        System.out.println("LOGGING IN ANONYMOUS CLIENT LOCALLY ->       username: " + username);
         clientConnections.put(c, new ConnectedClient(username, secret));
         connections.remove(c);
 
@@ -834,7 +836,7 @@ public class SessionManager extends Thread {
                                                     clientRegistry.getClientToken(client));
                 serverBroadcast(msg);
             }
-
+            System.out.println("REMOVING CONNECTION FROM clientConnections     -> username = " + client.getUsername());
             clientConnections.remove(con);
 
         }
@@ -996,6 +998,10 @@ public class SessionManager extends Thread {
                 serverBroadcast(ackMsg.toString());
             }
         }
+    }
+
+    public static String getServerId() {
+        return serverId;
     }
 
 

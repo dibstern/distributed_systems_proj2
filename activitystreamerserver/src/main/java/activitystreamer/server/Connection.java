@@ -141,8 +141,8 @@ public class Connection extends Thread {
                 SessionManager.getInstance().reconnectParentIfDisconnected();
             }
             SessionManager.getInstance().deleteClosedConnection(this, closeContext);
-            in.close();
-
+            this.setHasLoggedOut(true);
+            this.closeCon(SessionManager.getServerId());
         }
         catch (IOException e) {
             log.error("connection " + Settings.socketAddress(socket) + " closed with exception: " + e);
