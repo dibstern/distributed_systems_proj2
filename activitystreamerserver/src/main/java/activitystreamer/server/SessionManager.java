@@ -58,7 +58,7 @@ public class SessionManager extends Thread {
         deliveries = new ConcurrentLinkedQueue<String>();
         serverRegistry = new ServerRegistry(serverId, Settings.getLocalPort(), Settings.getLocalHostname());
 
-        // Store information about all know clients in a system
+        // Store information about all known clients in a system
         clientRegistry = new ClientRegistry();
 
         responder = new Responder();
@@ -625,6 +625,7 @@ public class SessionManager extends Thread {
         }
         return false;
     }
+
 
     /** Delays the disconnection to account for synchronisation and communication delays*/
     public void delayDisconnect() {

@@ -24,7 +24,7 @@ public class ConnectedServer implements Comparable<ConnectedServer> {
     /** Creates a new ConnectedServer
      * @param id The id of the new server
      * @param hostname The hostname of the new server
-     * @param port The portnumber of the new server
+     * @param port The port number of the new server
      * @param isChild True if the new server is a child of this server
      * @param isParent True if the new server is the parent of this server  */
     public ConnectedServer(String id, String hostname, int port, boolean isChild, boolean isParent) {
@@ -72,7 +72,7 @@ public class ConnectedServer implements Comparable<ConnectedServer> {
         return this.is_connected;
     }
 
-    /** Server sent a SERVER_ANNOUCEN, so update last_announce to current time*/
+    /** Server sent a SERVER_ANNOUNCE, so update last_announce to current time */
     public void resetTimeout() {
         last_announce = LocalDateTime.now();
     }

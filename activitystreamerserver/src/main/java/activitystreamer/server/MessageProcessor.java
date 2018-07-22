@@ -698,7 +698,6 @@ public class MessageProcessor {
      * @return true if client is anonymous, false otherwise */
     public static boolean isAnonymous(String username) {
         return (username.length() >= 9 && username.substring(0, 9).equals("anonymous"));
-
     }
 
 }

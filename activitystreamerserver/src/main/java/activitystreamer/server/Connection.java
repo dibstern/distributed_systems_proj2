@@ -87,7 +87,6 @@ public class Connection extends Thread {
 
     /**
      * Closes a connection and handles appropriate shutdown
-     * @param thisServerId The is of this server
      */
     public void closeCon() {
         if (open) {
