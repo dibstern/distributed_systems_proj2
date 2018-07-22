@@ -562,7 +562,7 @@ public class SessionManager extends Thread {
 
         // Add the client record to our local store and login the client
         clientRegistry.addFreshClient(username, secret);
-        String loginContext = "Context: Received LOGIN from Anon user, now in loginAnonymousClient (in SessionMangr).";
+        String loginContext = "Context: Received LOGIN from Anon user, now in loginAnonymousClient (in SessionManger).";
         Integer token = clientRegistry.logUser(true, username, secret, loginContext, Integer.MIN_VALUE);
 
         // Broadcast the LOCK_REQUEST
