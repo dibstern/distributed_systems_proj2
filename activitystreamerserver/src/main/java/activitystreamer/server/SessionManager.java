@@ -662,7 +662,7 @@ public class SessionManager extends Thread {
      * @return An integer representing the number of known servers in the network.
      */
     private int numKnownServersInNetwork() {
-        return serverRegistry.numServersInNetwork();
+        return serverRegistry.numServersInNetwork(this.serverId);
     }
 
     /** Stores the client connection for later reference. Sends a LOCK_REQUEST message and forwards this to all other

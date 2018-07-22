@@ -354,8 +354,8 @@ public class ServerRegistry {
 
     /** Get the number of servers we know about on the network
      * @return The number of servers on the network that we are aware of */
-    public Integer numServersInNetwork() {
-        return all_servers.size();
+    public Integer numServersInNetwork(String serverId) {
+        return (all_servers.containsKey(serverId) ? all_servers.size() - 1 : all_servers.size());
     }
 
     /** Get all servers we are connected to
