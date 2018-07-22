@@ -93,9 +93,8 @@ public class Connection extends Thread {
             log.info("closing connection " + Settings.socketAddress(socket));
             try {
                 term = true;
-                inreader.close();
-                out.close();
                 open = false;
+                this.socket.close();
             }
             catch (IOException e) {
                 // already closed?

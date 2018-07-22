@@ -216,6 +216,7 @@ public class SessionManager extends Thread {
                     // Deliver queued messages every second
                     Thread.sleep(Settings.getActivityInterval() / 5);
                     makeDeliveries();
+                    eventualRedirect(null);
                     secondsPassed += 1;
                 }
             }
@@ -352,6 +353,7 @@ public class SessionManager extends Thread {
      * If the server is the first server in the network (therefore the secret sever), then remote port and remote
      * hostname is null. Send message to all servers it has direct connection to. **/
     public void serverAnnounce() {
+        System.out.println("Running Server Announce!");
 
         int load = clientConnections.size();
         int port = Settings.getLocalPort();
@@ -580,51 +582,83 @@ public class SessionManager extends Thread {
      * @param c The connection to send the message on
      * @param anonClient True if the client is an anonymous client, false if registered */
     public boolean checkRedirectClient(Connection c, boolean anonClient) {
-        String msg;
-        String logoutContext;
-
         int load = clientConnections.size() + connections.size();
-        boolean redirect = false;
-        boolean logoutSuccess = false;
-        boolean disconnect = false;
-        // Check if we know of a server that has a load sufficiently lower than ours
+        ConnectedServer server = getLowLoadServer(load);
+        if (server != null) {
+            return redirect(c, server, anonClient);
+        }
+        else {
+            return false;
+        }
+    }
+
+    public ConnectedServer getLowLoadServer(Integer load) {
+        ArrayList<ConnectedServer> lowLoadServers = new ArrayList<ConnectedServer>();
         for (ConnectedServer server : serverRegistry.getAllServers()) {
             Integer serverLoad = server.getLoad();
-            if (server.isConnected() && serverLoad != null && serverLoad <= load - 2) {
-                redirect = true;
-                // Client should be redirected to a different server
-                msg = MessageProcessor.getRedirectMsg(server.getHostname(), server.getPort());
-                logoutContext = "Context: Redirecting, now in checkRedirect (in SessionManager)";
-
-                // If client is anonymous, we need to remove the record from our registry so we do not create conflicts
-                if (!anonClient) {
-                    boolean doDisconnect = false;
-                    logoutSuccess = logoutClient(c, logoutContext, doDisconnect, true, null);
-                    if (logoutSuccess) {
-                        disconnect = true;
-                    }
-                }
-                // Client is a registered user - merely set as logout and redirect
-                else {
-                    disconnect = true;
-                }
-                if (disconnect) {
-                    log.info("about to call redirect message, waiting 2 secs\n");
-                    delayDisconnect();
-
-                    // LOGOUT_BROADCAST should have been sent. Will now disconnect user and log them out.
-                    c.writeMsg(msg);
-                    closeConnection(c, "Close " + logoutContext);
-                    deleteClosedConnection(c);
-                    return true;
-                }
+            if (server.isConnected() && serverLoad != null && serverLoad <= load - 2 && !server.isTimedOut()) {
+                return server;
             }
         }
-        if (redirect && !logoutSuccess) {
-            log.debug("Completely Failed Redirection; logoutClient failed.");
+        return null;
+    }
+
+    public boolean eventualRedirect(Connection con) {
+        boolean anonClient;
+        String username;
+        int load = clientConnections.size() + connections.size();
+        ConnectedServer lowLoadServer = getLowLoadServer(load);
+        if (lowLoadServer == null) {
+            // log.debug("Redirect failed; logoutClient failed.");
+            return false;
         }
+        // Get a connection to redirect to the server
+        if (con == null) {
+            if (clientConnections.isEmpty()) {
+                return false;
+            }
+            HashMap.Entry<Connection, ConnectedClient> entry = clientConnections.entrySet().iterator().next();
+            con = entry.getKey();
+            ConnectedClient conClient = entry.getValue();
+            username = conClient.getUsername();
+            anonClient = MessageProcessor.isAnonymous(username);
+        }
+        else {
+            anonClient = MessageProcessor.isAnonymous(clientConnections.get(con).getUsername());
+        }
+        return redirect(con, lowLoadServer, anonClient);
+    }
+
+    public boolean redirect(Connection con, ConnectedServer destServer, boolean anonClient) {
+        boolean logoutSuccess = false;
+        boolean disconnect = false;
+        boolean redirect = false;
+
+        String msg = MessageProcessor.getRedirectMsg(destServer.getHostname(), destServer.getPort());;
+        String logoutContext = "Context: Redirecting, now in checkRedirect (in SessionManager)";
+
+        // If client is anonymous, we need to remove the record from our registry so we do not create conflicts
+        if (!anonClient) {
+            boolean doDisconnect = false;
+            logoutSuccess = logoutClient(con, logoutContext, doDisconnect, true, null);
+            if (logoutSuccess) { disconnect = true; }
+        }
+        // Client is a registered user - merely set as logout and redirect
+        else { disconnect = true; }
+        if (disconnect) {
+            log.info("about to call redirect message, waiting 2 secs\n");
+            delayDisconnect();
+
+            // LOGOUT_BROADCAST should have been sent. Will now disconnect user and log them out.
+            con.writeMsg(msg);
+            closeConnection(con, "Close " + logoutContext);
+            deleteClosedConnection(con);
+            return true;
+        }
+        if (redirect && !logoutSuccess) { log.debug("Completely Failed Redirection; logoutClient failed."); }
         return false;
     }
+
 
 
     /** Delays the disconnection to account for synchronisation and communication delays*/
@@ -771,6 +805,7 @@ public class SessionManager extends Thread {
     /** Sends a message to all of the servers a given server has a direct connection to.
      * @param msg The message to be sent **/
     public void serverBroadcast(String msg) {
+        System.out.println("Broadcasting!");
         for (Connection c: serverRegistry.getServerConnections().keySet()) {
             c.writeMsg(msg);
         }

@@ -52,7 +52,7 @@ public class ConnectedServer implements Comparable<ConnectedServer> {
     public boolean isTimedOut() {
         if (last_announce != null) {
             LocalDateTime timeNow = LocalDateTime.now();
-            LocalDateTime timeoutTime = last_announce.plusSeconds(20);
+            LocalDateTime timeoutTime = last_announce.plusSeconds(6);
             // Check if time between last announce and now is greater than timeout boundary
             return (timeNow.isAfter(timeoutTime));
         }
