@@ -19,8 +19,8 @@ import java.util.Map;
 
 public class Responder {
 
-    private static final boolean TESTING_DELAY = true;
-    private static final boolean DEBUG = true;
+    private static final boolean TESTING_DELAY = false;
+    private static final boolean DEBUG = false;
 
     /**
      * @param json The JSON object received from the client
@@ -598,12 +598,18 @@ public class Responder {
 
                     // We're connected to the client, so we're the sender. Update the ConnectedClient if it's not Anon!
                     if (client != null) {
+                        System.out.println("RECEIVED LOCK_ALLOWED - WE ARE CONNECTED TO THE CLIENT SO WE'RE THE SENDER");
                         if (!MessageProcessor.isAnonymous(username)) {
+                            System.out.println("USER IS NOT ANONYMOUS - COMPLETE REGISTRATION");
                             sessionManager.updateAndCompleteRegistration(client, username, secret);
+                        }
+                        else {
+                            System.out.println("USER IS ANONYMOUS - DO NOTHING");
                         }
                     }
                     // We're not connected to the client so we're not the sender; forward the LOCK_ALLOWED message!
                     else {
+                        System.out.println("WE'RE NOT THE SENDER - FORWARD LOCK_ALLOWED");
                         sessionManager.forwardServerMsg(con, json.toString());
                     }
                 }

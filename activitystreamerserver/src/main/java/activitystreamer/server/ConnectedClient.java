@@ -35,13 +35,21 @@ public class ConnectedClient {
 
     /** Increments the number of LOCK_ALLOWED messages received */
     public boolean receivedLockAllowed() {
+
         if (isRegistered()) {
+            System.out.println("In receivedLockAllowed(). Is registered - returning false");
             return false;
         }
+        System.out.println("Decrementing lockRequestServerCount");
         this.lockRequestServerCount -= 1;
         if (this.lockRequestServerCount == 0) {
+
             register();
         }
+        else {
+            System.out.println("Server Count is not yet zero - it is currently " + this.lockRequestServerCount + " .");
+        }
+        System.out.println("Registered client? returning isRegistered() == " + isRegistered());
         return isRegistered();
     }
 
